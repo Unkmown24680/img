@@ -1,0 +1,39 @@
+{
+  "name": "pixedge",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "generate:session": "node scripts/generate-session.mjs"
+  },
+  "dependencies": {
+    "@auth/core": "^0.34.3",
+    "@auth/upstash-redis-adapter": "^2.11.1",
+    "@types/jszip": "^3.4.0",
+    "@upstash/redis": "^1.36.1",
+    "@vercel/analytics": "^1.6.1",
+    "@vercel/kv": "^3.0.0",
+    "bcryptjs": "^3.0.3",
+    "framer-motion": "latest",
+    "jsonwebtoken": "^9.0.3",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.562.0",
+    "next": "latest",
+    "next-auth": "^4.24.13",
+    "qrcode.react": "^4.2.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "telegram": "^2.26.22"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest"
+  }
+}

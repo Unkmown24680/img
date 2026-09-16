@@ -1,0 +1,2366 @@
+"use client";
+
+import { useState, useCallback, useEffect, useRef } from "react";
+import Link from "next/link";
+import {
+    Upload,
+    Copy,
+    Check,
+    Shield,
+    Zap,
+    Globe,
+    History,
+    QrCode,
+    Settings,
+    Code2,
+    ArrowRight,
+    ExternalLink,
+    Image as ImageIcon,
+    Sun,
+    Moon,
+    MessageSquare,
+    AlertCircle,
+    X,
+    Clock,
+    BarChart2,
+    Lock,
+    Eye,
+    EyeOff,
+    Sparkles,
+    HelpCircle,
+    Layers,
+    FileText,
+    CheckCheck,
+    FileArchive,
+    Flame,
+    Share2,
+} from "lucide-react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
+import { useSession, signOut } from "next-auth/react";
+
+interface HistoryItem {
+    id: string;
+    url: string;
+    timestamp: number;
+}
+
+interface BatchItem {
+    id: string;
+    fileName: string;
+    size: number;
+    url?: string;
+    direct_url?: string;
+    status: 'pending' | 'uploading' | 'complete' | 'error';
+    progress: number;
+    error?: string;
+}
+
+function SpotlightCard({
+    children,
+    style = {},
+    glowColor = "rgba(139, 92, 246, 0.18)",
+    ...props
+}: {
+    children: React.ReactNode;
+    style?: React.CSSProperties;
+    glowColor?: string;
+    [key: string]: any;
+}) {
+    const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+    const [isHovered, setIsHovered] = useState(false);
+
+    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setMousePosition({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+        });
+    };
+
+    return (
+        <motion.div
+            initial="initial"
+            whileHover="hover"
+            onMouseMove={handleMouseMove}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            transition={{ type: "spring", stiffness: 350, damping: 22 }}
+            variants={{
+                initial: { y: 0, scale: 1 },
+                hover: { y: -6, scale: 1.015 },
+            }}
+            style={{
+                position: "relative",
+                overflow: "hidden",
+                borderRadius: "24px",
+                background: "var(--panel-bg)",
+                backdropFilter: "blur(24px)",
+                border: isHovered
+                    ? "1px solid rgba(139, 92, 246, 0.4)"
+                    : "1px solid var(--border-color)",
+                boxShadow: isHovered
+                    ? "0 20px 45px rgba(139, 92, 246, 0.15), 0 0 0 1px rgba(139, 92, 246, 0.25)"
+                    : "0 10px 30px rgba(0, 0, 0, 0.1)",
+                transition: "border-color 0.3s ease, box-shadow 0.3s ease",
+                ...style,
+            }}
+            {...props}
+        >
+            {/* Spotlight Glow Effect */}
+            <div
+                style={{
+                    pointerEvents: "none",
+                    position: "absolute",
+                    inset: 0,
+                    opacity: isHovered ? 1 : 0,
+                    transition: "opacity 0.4s ease",
+                    background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, ${glowColor}, transparent 45%)`,
+                    zIndex: 0,
+                }}
+            />
+            <div style={{ position: "relative", zIndex: 1 }}>{children}</div>
+        </motion.div>
+    );
+}
+
+// Signature icon animations per card feature (matching betterlyrics.org style)
+const bounceUpIconVariant: Variants = {
+    initial: { y: 0, scale: 1 },
+    hover: { y: [0, -8, 0], scale: [1, 1.25, 1.15], transition: { duration: 0.5, ease: "easeInOut" } },
+};
+
+const spinZapIconVariant: Variants = {
+    initial: { rotate: 0, scale: 1 },
+    hover: { rotate: [0, -20, 20, -10, 10, 0], scale: [1, 1.25, 1.15], transition: { duration: 0.6, ease: "easeInOut" } },
+};
+
+const pulseGlobeIconVariant: Variants = {
+    initial: { rotate: 0, scale: 1 },
+    hover: { rotate: 360, scale: 1.2, transition: { duration: 1, ease: "easeInOut" } },
+};
+
+const codeWiggleIconVariant: Variants = {
+    initial: { scale: 1, rotate: 0 },
+    hover: { scale: [1, 1.25, 1.15], rotate: [0, -15, 15, 0], transition: { duration: 0.5 } },
+};
+
+const cameraPulseIconVariant: Variants = {
+    initial: { scale: 1 },
+    hover: { scale: [1, 1.3, 0.92, 1.15], transition: { duration: 0.5 } },
+};
+
+const chatBubbleIconVariant: Variants = {
+    initial: { scale: 1, rotate: 0 },
+    hover: { scale: [1, 1.25, 1.15], rotate: [0, -18, 18, 0], transition: { duration: 0.5 } },
+};
+
+export default function Home() {
+    const { data: session } = useSession();
+    const [isDragging, setIsDragging] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadStatus, setUploadStatus] = useState<string>("");
+    const [uploadSpeed, setUploadSpeed] = useState<string>("0 MB/s");
+    const [uploadTransferred, setUploadTransferred] = useState<string>("");
+    const [uploadEta, setUploadEta] = useState<string>("");
+    const [result, setResult] = useState<{ id: string; url: string } | null>(
+        null,
+    );
+    const [copied, setCopied] = useState(false);
+    const [customId, setCustomId] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [history, setHistory] = useState<HistoryItem[]>([]);
+    const [showQr, setShowQr] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [showToast, setShowToast] = useState(false);
+    const [theme, setTheme] = useState<"dark" | "light">("dark");
+    const [idError, setIdError] = useState<{ message: string; suggestions: string[] } | null>(null);
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
+    const [expiresIn, setExpiresIn] = useState<string>("");
+    const [burnAfterView, setBurnAfterView] = useState<boolean>(false);
+    const [burnAfterDownload, setBurnAfterDownload] = useState<boolean>(false);
+    const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
+    const [batchActive, setBatchActive] = useState(false);
+    const [batchCopied, setBatchCopied] = useState(false);
+    const [albumUrl, setAlbumUrl] = useState<string | null>(null);
+    const [albumCopied, setAlbumCopied] = useState(false);
+    const [pasteToast, setPasteToast] = useState<string | null>(null);
+
+    // Load history and theme from localStorage
+    useEffect(() => {
+        const savedHistory = localStorage.getItem("pixedge_history");
+        if (savedHistory) {
+            try {
+                setHistory(JSON.parse(savedHistory));
+            } catch (e) {
+                console.error("Failed to load history", e);
+            }
+        }
+
+        const savedTheme = localStorage.getItem("pixedge_theme") as
+            | "dark"
+            | "light";
+        if (savedTheme) {
+            setTheme(savedTheme);
+            document.documentElement.setAttribute("data-theme", savedTheme);
+        } else {
+            // Default to dark if no theme is saved
+            document.documentElement.setAttribute("data-theme", "dark");
+        }
+    }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === "dark" ? "light" : "dark";
+        setTheme(newTheme);
+        document.documentElement.setAttribute("data-theme", newTheme);
+        localStorage.setItem("pixedge_theme", newTheme);
+    };
+
+    const saveToHistory = (item: HistoryItem) => {
+        const newHistory = [item, ...history].slice(0, 5); // Keep last 5
+        setHistory(newHistory);
+        localStorage.setItem("pixedge_history", JSON.stringify(newHistory));
+    };
+
+    const copyToClipboard = (text: string) => {
+        const performCopy = () => {
+            setCopied(true);
+            setShowToast(true);
+            setTimeout(() => {
+                setCopied(false);
+                setShowToast(false);
+            }, 2000);
+        };
+
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(performCopy);
+        } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand("copy");
+            performCopy();
+            document.body.removeChild(textArea);
+        }
+    };
+
+    const handleShare = async (url: string, title = "PixEdge Media") => {
+        if (typeof navigator !== "undefined" && navigator.share) {
+            try {
+                await navigator.share({
+                    title,
+                    text: "Check out this media on PixEdge",
+                    url,
+                });
+            } catch (err: any) {
+                if (err?.name !== "AbortError") {
+                    copyToClipboard(url);
+                }
+            }
+        } else {
+            copyToClipboard(url);
+        }
+    };
+
+    const uploadFile = async (file: File) => {
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+            alert("Please upload an image or video file");
+            return;
+        }
+
+        // 2 GB Limit Check for MTProto Telegram storage layer
+        const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
+        if (file.size > MAX_FILE_SIZE) {
+            alert("File too large. Maximum supported file size is 2 GB.");
+            return;
+        }
+
+        const startTime = Date.now();
+        let lastLoaded = 0;
+        let lastTime = startTime;
+
+        setUploading(true);
+        setUploadProgress(0);
+        setUploadSpeed("0 MB/s");
+        setUploadTransferred(`0 MB / ${(file.size / (1024 * 1024)).toFixed(1)} MB`);
+        setUploadEta("Calculating...");
+        setUploadStatus("Preparing upload...");
+        setResult(null);
+        setShowQr(false);
+        setIdError(null);
+        setPendingFile(file);
+
+        const formData = new FormData();
+        formData.append("file", file);
+        if (customId) formData.append("customId", customId);
+        if (expiresIn) formData.append("expiresIn", expiresIn);
+        if (password) formData.append("password", password);
+        if (burnAfterView) formData.append("burnAfterView", "true");
+        if (burnAfterDownload) formData.append("burnAfterDownload", "true");
+
+        try {
+            // Use XMLHttpRequest for chunk upload progress tracking
+            const result = await new Promise<any>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                        setUploadProgress(percent);
+
+                        const now = Date.now();
+                        const timeDiff = (now - lastTime) / 1000;
+
+                        if (timeDiff >= 0.2 || percent === 100) {
+                            const loadedDiff = e.loaded - lastLoaded;
+                            const speedBytesPerSec = timeDiff > 0 ? loadedDiff / timeDiff : 0;
+
+                            let speedStr = "0 KB/s";
+                            if (speedBytesPerSec >= 1024 * 1024) {
+                                speedStr = `${(speedBytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+                            } else if (speedBytesPerSec > 0) {
+                                speedStr = `${(speedBytesPerSec / 1024).toFixed(0)} KB/s`;
+                            }
+                            setUploadSpeed(speedStr);
+
+                            const transferredMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                            const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+                            setUploadTransferred(`${transferredMB} MB / ${totalMB} MB`);
+
+                            if (speedBytesPerSec > 0 && e.loaded < e.total) {
+                                const remainingBytes = e.total - e.loaded;
+                                const remainingSeconds = Math.ceil(remainingBytes / speedBytesPerSec);
+                                setUploadEta(`ETA ${remainingSeconds}s`);
+                            } else {
+                                setUploadEta(percent === 100 ? "Processing..." : "Done");
+                            }
+
+                            lastTime = now;
+                            lastLoaded = e.loaded;
+                        }
+
+                        if (percent < 100) {
+                            setUploadStatus(`Uploading... ${percent}%`);
+                        } else {
+                            setUploadStatus("Storing via MTProto Telegram Cloud...");
+                        }
+                    }
+                });
+
+                xhr.addEventListener("load", () => {
+                    if (xhr.status === 413) {
+                        reject(new Error("File too large for server limits."));
+                        return;
+                    }
+                    try {
+                        const json = JSON.parse(xhr.responseText);
+                        resolve(json);
+                    } catch {
+                        reject(new Error("Upload failed. File may be too large for server limits."));
+                    }
+                });
+
+                xhr.addEventListener("error", () => {
+                    reject(new Error("Network error. Please try again."));
+                });
+
+                xhr.addEventListener("abort", () => {
+                    reject(new Error("Upload cancelled."));
+                });
+
+                xhr.open("POST", "/api/v1/upload");
+                xhr.send(formData);
+            });
+
+            // Handle ID collision with suggestions
+            if (!result.success && result.error?.code === "ID_ALREADY_EXISTS") {
+                setIdError({
+                    message: result.error.message,
+                    suggestions: result.error.suggestions || []
+                });
+                setUploading(false);
+                return;
+            }
+
+            // Handle invalid custom ID
+            if (!result.success && result.error?.code === "INVALID_CUSTOM_ID") {
+                setIdError({
+                    message: result.error.message,
+                    suggestions: []
+                });
+                setUploading(false);
+                return;
+            }
+
+            if (!result.success) throw new Error(result.error?.message || "Upload failed");
+
+            setUploadStatus("Complete!");
+            setUploadProgress(100);
+            setPendingFile(null);
+
+            const data = result.data;
+            setResult(data);
+            saveToHistory({
+                id: data.id,
+                url: data.url,
+                timestamp: Date.now(),
+            });
+            setCustomId("");
+            setPassword("");
+            setExpiresIn("");
+            setShowPassword(false);
+        } catch (err: any) {
+            alert(err.message || "Upload failed");
+            setPendingFile(null);
+        } finally {
+            setUploading(false);
+            setIsDragging(false);
+        }
+    };
+
+    // Retry upload with a suggested ID
+    const retryWithSuggestion = async (suggestion: string) => {
+        setIdError(null);
+        setCustomId(suggestion);
+        if (pendingFile) {
+            const file = pendingFile;
+            // Small delay to let state update
+            setTimeout(() => uploadFileWithId(file, suggestion), 50);
+        }
+    };
+
+    // Upload with specific custom ID (for retries)
+    const uploadFileWithId = async (file: File, id: string) => {
+        const startTime = Date.now();
+        let lastLoaded = 0;
+        let lastTime = startTime;
+
+        setUploading(true);
+        setUploadProgress(0);
+        setUploadSpeed("0 MB/s");
+        setUploadTransferred(`0 MB / ${(file.size / (1024 * 1024)).toFixed(1)} MB`);
+        setUploadEta("Calculating...");
+        setUploadStatus("Retrying upload...");
+        setIdError(null);
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("customId", id);
+        if (expiresIn) formData.append("expiresIn", expiresIn);
+
+        try {
+            const result = await new Promise<any>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                        setUploadProgress(percent);
+
+                        const now = Date.now();
+                        const timeDiff = (now - lastTime) / 1000;
+
+                        if (timeDiff >= 0.2 || percent === 100) {
+                            const loadedDiff = e.loaded - lastLoaded;
+                            const speedBytesPerSec = timeDiff > 0 ? loadedDiff / timeDiff : 0;
+
+                            let speedStr = "0 KB/s";
+                            if (speedBytesPerSec >= 1024 * 1024) {
+                                speedStr = `${(speedBytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`;
+                            } else if (speedBytesPerSec > 0) {
+                                speedStr = `${(speedBytesPerSec / 1024).toFixed(0)} KB/s`;
+                            }
+                            setUploadSpeed(speedStr);
+
+                            const transferredMB = (e.loaded / (1024 * 1024)).toFixed(1);
+                            const totalMB = (e.total / (1024 * 1024)).toFixed(1);
+                            setUploadTransferred(`${transferredMB} MB / ${totalMB} MB`);
+
+                            if (speedBytesPerSec > 0 && e.loaded < e.total) {
+                                const remainingBytes = e.total - e.loaded;
+                                const remainingSeconds = Math.ceil(remainingBytes / speedBytesPerSec);
+                                setUploadEta(`ETA ${remainingSeconds}s`);
+                            } else {
+                                setUploadEta(percent === 100 ? "Processing..." : "Done");
+                            }
+
+                            lastTime = now;
+                            lastLoaded = e.loaded;
+                        }
+
+                        if (percent < 100) {
+                            setUploadStatus(`Uploading... ${percent}%`);
+                        } else {
+                            setUploadStatus("Storing via MTProto Telegram Cloud...");
+                        }
+                    }
+                });
+
+                xhr.addEventListener("load", () => {
+                    try {
+                        const json = JSON.parse(xhr.responseText);
+                        resolve(json);
+                    } catch {
+                        reject(new Error("Upload failed"));
+                    }
+                });
+
+                xhr.addEventListener("error", () => reject(new Error("Network error")));
+                xhr.open("POST", "/api/v1/upload");
+                xhr.send(formData);
+            });
+
+            if (!result.success) throw new Error(result.error?.message || "Upload failed");
+
+            setUploadStatus("Complete!");
+            setUploadProgress(100);
+            setPendingFile(null);
+
+            const data = result.data;
+            setResult(data);
+            saveToHistory({ id: data.id, url: data.url, timestamp: Date.now() });
+            setCustomId("");
+        } catch (err: any) {
+            alert(err.message || "Upload failed");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const processBatchUpload = async (files: File[]) => {
+        const validFiles = files.filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+        if (validFiles.length === 0) {
+            alert("Please select valid image or video files.");
+            return;
+        }
+
+        if (validFiles.length === 1 && !batchActive) {
+            uploadFile(validFiles[0]);
+            return;
+        }
+
+        setBatchActive(true);
+        setResult(null);
+        setIdError(null);
+
+        const initialQueue: BatchItem[] = validFiles.map((f, i) => ({
+            id: `batch-${Date.now()}-${i}`,
+            fileName: f.name,
+            size: f.size,
+            status: 'pending',
+            progress: 0,
+        }));
+
+        setBatchQueue(initialQueue);
+
+        for (let i = 0; i < validFiles.length; i++) {
+            const file = validFiles[i];
+            const item = initialQueue[i];
+
+            setBatchQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'uploading' } : q));
+
+            try {
+                const formData = new FormData();
+                formData.append("file", file);
+                if (expiresIn) formData.append("expiresIn", expiresIn);
+                if (password) formData.append("password", password);
+
+                const xhr = new XMLHttpRequest();
+                const res = await new Promise<any>((resolve, reject) => {
+                    xhr.upload.addEventListener("progress", (e) => {
+                        if (e.lengthComputable) {
+                            const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                            setBatchQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress: percent } : q));
+                        }
+                    });
+                    xhr.addEventListener("load", () => {
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch {
+                            reject(new Error("Failed to parse response"));
+                        }
+                    });
+                    xhr.addEventListener("error", () => reject(new Error("Network error")));
+                    xhr.open("POST", "/api/v1/upload");
+                    xhr.send(formData);
+                });
+
+                if (res.success && res.data) {
+                    setBatchQueue(prev => prev.map(q => q.id === item.id ? {
+                        ...q,
+                        status: 'complete',
+                        progress: 100,
+                        url: res.data.url,
+                        direct_url: res.data.direct_url,
+                    } : q));
+                    saveToHistory({ id: res.data.id, url: res.data.url, timestamp: Date.now() });
+                } else {
+                    setBatchQueue(prev => prev.map(q => q.id === item.id ? {
+                        ...q,
+                        status: 'error',
+                        error: res.error?.message || "Upload failed",
+                    } : q));
+                }
+            } catch (err: any) {
+                setBatchQueue(prev => prev.map(q => q.id === item.id ? {
+                    ...q,
+                    status: 'error',
+                    error: err.message || "Upload error",
+                } : q));
+            }
+        }
+
+        // Auto-create album if 2 or more files completed
+        setTimeout(async () => {
+            setBatchQueue(currentQueue => {
+                const completed = currentQueue.filter(q => q.status === 'complete' && q.url);
+                if (completed.length >= 2) {
+                    const imageIds = completed.map(q => {
+                        const parts = q.url!.split('/i/');
+                        return parts[1] || '';
+                    }).filter(Boolean);
+
+                    if (imageIds.length >= 2) {
+                        fetch('/api/album/create', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                imageIds,
+                                title: 'Batch Upload Album',
+                                password: password || undefined,
+                                expiresIn: expiresIn || undefined,
+                            }),
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success && data.url) {
+                                setAlbumUrl(data.url);
+                            }
+                        })
+                        .catch(err => console.error("Failed to auto-create album", err));
+                    }
+                }
+                return currentQueue;
+            });
+        }, 150);
+
+        setPassword("");
+        setExpiresIn("");
+    };
+
+    const copyAllBatchLinks = () => {
+        const links = batchQueue.filter(q => q.status === 'complete' && q.url).map(q => q.url).join('\n');
+        if (links) {
+            navigator.clipboard.writeText(links);
+            setBatchCopied(true);
+            setTimeout(() => setBatchCopied(false), 2000);
+        }
+    };
+
+    const copyAllMarkdown = () => {
+        const md = batchQueue.filter(q => q.status === 'complete' && q.url).map(q => `![${q.fileName}](${q.url})`).join('\n');
+        if (md) {
+            navigator.clipboard.writeText(md);
+            setBatchCopied(true);
+            setTimeout(() => setBatchCopied(false), 2000);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = () => setIsDragging(false);
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/") || f.type.startsWith("video/"));
+        if (files.length > 0) {
+            processBatchUpload(files);
+        }
+    };
+
+    const processBatchUploadRef = useRef(processBatchUpload);
+    useEffect(() => {
+        processBatchUploadRef.current = processBatchUpload;
+    });
+
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            const clipboardData = e.clipboardData;
+            if (!clipboardData) return;
+
+            const filesToUpload: File[] = [];
+
+            // 1. Check clipboard files
+            if (clipboardData.files && clipboardData.files.length > 0) {
+                for (let i = 0; i < clipboardData.files.length; i++) {
+                    const f = clipboardData.files[i];
+                    if (f.type.startsWith("image/") || f.type.startsWith("video/")) {
+                        filesToUpload.push(f);
+                    }
+                }
+            }
+
+            // 2. Check clipboard items (for screenshots or web images)
+            if (filesToUpload.length === 0 && clipboardData.items) {
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.kind === 'file') {
+                        const f = item.getAsFile();
+                        if (f && (f.type.startsWith("image/") || f.type.startsWith("video/"))) {
+                            let cleanFile = f;
+                            if (!f.name || f.name === 'image.png' || f.name === 'blob') {
+                                const ext = f.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+                                const d = new Date();
+                                const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;
+                                cleanFile = new File([f], `pasted_image_${ts}.${ext}`, { type: f.type });
+                            }
+                            filesToUpload.push(cleanFile);
+                        }
+                    }
+                }
+            }
+
+            if (filesToUpload.length > 0) {
+                e.preventDefault();
+                setPasteToast(`Pasting ${filesToUpload.length} file${filesToUpload.length > 1 ? 's' : ''} from clipboard...`);
+                setTimeout(() => setPasteToast(null), 3500);
+                processBatchUploadRef.current(filesToUpload);
+            }
+        };
+
+        window.addEventListener("paste", handlePaste);
+        return () => window.removeEventListener("paste", handlePaste);
+    }, []);
+
+    return (
+        <>
+            {/* Top Navigation Chip - Part of Page (Scrolls away) */}
+            <motion.nav
+                initial={{ y: -100, x: "-50%", opacity: 0 }}
+                animate={{ y: 0, x: "-50%", opacity: 1 }}
+                className="nav-chip"
+                style={{
+                    position: "absolute",
+                    top: "2rem",
+                    left: "50%",
+                    background: "var(--panel-bg)",
+                    backdropFilter: "blur(30px)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "100px",
+                    padding: "12px 32px",
+                    display: "flex",
+                    alignItems: "center",
+                    zIndex: 9999,
+                    boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+                    whiteSpace: "nowrap",
+                }}
+            >
+                <Link
+                    href="/"
+                    className="nav-brand"
+                    style={{
+                        color: "var(--text-main)",
+                        textDecoration: "none",
+                        fontWeight: "800",
+                        fontSize: "1.5rem",
+                        letterSpacing: "-1.5px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                    }}
+                >
+                    <Zap
+                        size={22}
+                        fill="var(--accent-primary)"
+                        color="var(--accent-primary)"
+                    />
+                    PixEdge
+                </Link>
+                <Link
+                    href="/docs"
+                    className="nav-docs-link"
+                    style={{
+                        color: "var(--text-muted)",
+                        textDecoration: "none",
+                        fontSize: "0.95rem",
+                        fontWeight: "600",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        transition: "color 0.2s",
+                    }}
+                >
+                    <Code2 size={16} />
+                    <span className="nav-docs-text">API Docs</span>
+                </Link>
+                <Link
+                    href="/stats"
+                    className="nav-docs-link"
+                    style={{
+                        color: "var(--text-muted)",
+                        textDecoration: "none",
+                        fontSize: "0.95rem",
+                        fontWeight: "600",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        transition: "color 0.2s",
+                    }}
+                >
+                    <BarChart2 size={16} />
+                    <span className="nav-docs-text">Stats</span>
+                </Link>
+
+                <button
+                    onClick={toggleTheme}
+                    style={{
+                        background: "rgba(255, 255, 255, 0.05)",
+                        border: "1px solid var(--border-color)",
+                        borderRadius: "50px",
+                        width: "38px",
+                        height: "38px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        color: "var(--text-main)",
+                        transition: "all 0.3s",
+                    }}
+                >
+                    {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+
+                {/* User Account */}
+                {session ? (
+                    <Link
+                        href="/dashboard"
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            padding: "6px 14px 6px 6px",
+                            background: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid var(--border-color)",
+                            borderRadius: "50px",
+                            textDecoration: "none",
+                            transition: "all 0.2s",
+                        }}
+                    >
+                        <img
+                            src={
+                                session.user?.image ||
+                                `https://ui-avatars.com/api/?name=${session.user?.name}&background=8b5cf6&color=fff`
+                            }
+                            alt="Avatar"
+                            style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                            }}
+                        />
+                        <span
+                            className="nav-username"
+                            style={{
+                                color: "var(--text-main)",
+                                fontSize: "0.9rem",
+                                fontWeight: 500,
+                            }}
+                        >
+                            {session.user?.name?.split(" ")[0]}
+                        </span>
+                    </Link>
+                ) : (
+                    <Link
+                        href="/login"
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "10px 20px",
+                            background:
+                                "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))",
+                            borderRadius: "50px",
+                            color: "white",
+                            textDecoration: "none",
+                            fontSize: "0.9rem",
+                            fontWeight: 600,
+                            transition: "all 0.2s",
+                        }}
+                    >
+                        Login
+                    </Link>
+                )}
+            </motion.nav>
+
+            <main className="main-container">
+                <header className="hero">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.5 }}
+                    >
+                        <div
+                            style={{
+                                background: "rgba(139, 92, 246, 0.1)",
+                                padding: "8px 16px",
+                                borderRadius: "100px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                marginBottom: "2rem",
+                                border: "1px solid rgba(139, 92, 246, 0.2)",
+                                color: "#8b5cf6",
+                                fontSize: "0.85rem",
+                                fontWeight: "600",
+                            }}
+                        >
+                            <Zap size={14} fill="#8b5cf6" />
+                            <span>Now powered by Upstash & Telegram</span>
+                        </div>
+                    </motion.div>
+
+                    <motion.h1
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.2, duration: 0.8 }}
+                    >
+                        Media hosted,
+                        <br />
+                        at the edge.
+                    </motion.h1>
+                    <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.4, duration: 1 }}
+                    >
+                        Zero storage. Lightning speed. Infinity scale.
+                    </motion.p>
+
+                    {/* Quick 1-2-3 How-It-Works Visual Guide for New Users */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 }}
+                        style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "0.75rem",
+                            flexWrap: "wrap",
+                            marginTop: "1.75rem",
+                        }}
+                    >
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(139, 92, 246, 0.08)", border: "1px solid rgba(139, 92, 246, 0.2)", padding: "6px 14px", borderRadius: "100px", fontSize: "0.82rem", color: "var(--text-main)", fontWeight: 500 }}>
+                            <span style={{ background: "#8b5cf6", color: "#fff", width: "20px", height: "20px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700 }}>1</span>
+                            Drop Media (up to 2 GB)
+                        </div>
+                        <ArrowRight size={14} style={{ color: "var(--text-muted)", opacity: 0.5 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(6, 182, 212, 0.08)", border: "1px solid rgba(6, 182, 212, 0.2)", padding: "6px 14px", borderRadius: "100px", fontSize: "0.82rem", color: "var(--text-main)", fontWeight: 500 }}>
+                            <span style={{ background: "#06b6d4", color: "#fff", width: "20px", height: "20px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700 }}>2</span>
+                            Set Custom Link / PIN (Optional)
+                        </div>
+                        <ArrowRight size={14} style={{ color: "var(--text-muted)", opacity: 0.5 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.2)", padding: "6px 14px", borderRadius: "100px", fontSize: "0.82rem", color: "var(--text-main)", fontWeight: 500 }}>
+                            <span style={{ background: "#10b981", color: "#fff", width: "20px", height: "20px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700 }}>3</span>
+                            Get Instant Share Link
+                        </div>
+                    </motion.div>
+                </header>
+
+                <motion.div
+                    className="upload-card"
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6 }}
+                >
+                    <div style={{ marginBottom: "1.5rem", position: "relative" }}>
+                        <div
+                            style={{
+                                position: "absolute",
+                                left: "12px",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                color: "var(--text-muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
+                        >
+                            <Settings size={14} />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Custom Link Name (Optional)"
+                            value={customId}
+                            onChange={(e) => {
+                                setCustomId(
+                                    e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"),
+                                );
+                                setIdError(null);
+                            }}
+                            style={{
+                                width: "100%",
+                                background: "var(--input-bg)",
+                                border: `1px solid ${idError ? "rgba(239, 68, 68, 0.5)" : "var(--border-color)"}`,
+                                borderRadius: "16px",
+                                padding: "12px 12px 12px 40px",
+                                color: "var(--text-main)",
+                                fontSize: "0.9rem",
+                                outline: "none",
+                                transition: "all 0.2s",
+                            }}
+                            onFocus={(e) =>
+                                (e.target.style.borderColor = idError ? "rgba(239, 68, 68, 0.7)" : "var(--accent-primary)")
+                            }
+                            onBlur={(e) =>
+                                (e.target.style.borderColor = idError ? "rgba(239, 68, 68, 0.5)" : "var(--border-color)")
+                            }
+                        />
+                    </div>
+
+                    {/* Expiry Selector */}
+                    <div style={{ marginBottom: "1.5rem", position: "relative" }}>
+                        <div
+                            style={{
+                                position: "absolute",
+                                left: "12px",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                color: "var(--text-muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <Clock size={14} />
+                        </div>
+                        <select
+                            value={expiresIn}
+                            onChange={(e) => setExpiresIn(e.target.value)}
+                            style={{
+                                width: "100%",
+                                background: "var(--input-bg)",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "16px",
+                                padding: "12px 12px 12px 40px",
+                                color: expiresIn ? "var(--text-main)" : "var(--text-muted)",
+                                fontSize: "0.9rem",
+                                outline: "none",
+                                appearance: "none" as const,
+                                WebkitAppearance: "none" as const,
+                                cursor: "pointer",
+                                transition: "all 0.2s",
+                                fontFamily: "inherit",
+                            }}
+                        >
+                            <option value="" style={{ background: "var(--bg-color)", color: "var(--text-main)" }}>Link Expiry: Never (Default)</option>
+                            <option value="3600" style={{ background: "var(--bg-color)", color: "var(--text-main)" }}>Expires in 1 Hour</option>
+                            <option value="86400" style={{ background: "var(--bg-color)", color: "var(--text-main)" }}>Expires in 24 Hours</option>
+                            <option value="604800" style={{ background: "var(--bg-color)", color: "var(--text-main)" }}>Expires in 7 Days</option>
+                            <option value="2592000" style={{ background: "var(--bg-color)", color: "var(--text-main)" }}>Expires in 30 Days</option>
+                        </select>
+                    </div>
+
+                    {/* Burn After Reading (Self-Destruct) Settings */}
+                    <div style={{ marginBottom: "1.5rem" }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setBurnAfterView(prev => !prev)}
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '14px',
+                                    border: burnAfterView ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                                    background: burnAfterView ? 'rgba(239, 68, 68, 0.15)' : 'var(--input-bg)',
+                                    color: burnAfterView ? '#f87171' : 'var(--text-muted)',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontFamily: 'inherit',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                <Flame size={14} color={burnAfterView ? '#f87171' : 'currentColor'} />
+                                Burn 1st View
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setBurnAfterDownload(prev => !prev)}
+                                style={{
+                                    padding: '10px 12px',
+                                    borderRadius: '14px',
+                                    border: burnAfterDownload ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                                    background: burnAfterDownload ? 'rgba(239, 68, 68, 0.15)' : 'var(--input-bg)',
+                                    color: burnAfterDownload ? '#f87171' : 'var(--text-muted)',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    fontFamily: 'inherit',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                <Flame size={14} color={burnAfterDownload ? '#f87171' : 'currentColor'} />
+                                Burn Download
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Batch Upload Queue / Results Gallery */}
+                    <AnimatePresence>
+                        {batchQueue.length > 0 && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.98 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                style={{
+                                    marginBottom: "1.5rem",
+                                    background: "rgba(139, 92, 246, 0.04)",
+                                    border: "1px solid rgba(139, 92, 246, 0.2)",
+                                    borderRadius: "20px",
+                                    padding: "1.25rem",
+                                    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.12)",
+                                }}
+                            >
+                                {/* Header Bar */}
+                                <div
+                                    style={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between",
+                                        flexWrap: "wrap",
+                                        gap: "12px",
+                                        marginBottom: "1rem",
+                                        paddingBottom: "12px",
+                                        borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                        <div
+                                            style={{
+                                                background: "rgba(139, 92, 246, 0.15)",
+                                                border: "1px solid rgba(139, 92, 246, 0.3)",
+                                                padding: "6px",
+                                                borderRadius: "10px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                            }}
+                                        >
+                                            <Layers size={18} color="#8b5cf6" />
+                                        </div>
+                                        <div>
+                                            <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-main)", display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <span>Batch Queue</span>
+                                                <span
+                                                    style={{
+                                                        background: batchQueue.every(q => q.status === 'complete') ? "rgba(16, 185, 129, 0.15)" : "rgba(139, 92, 246, 0.15)",
+                                                        color: batchQueue.every(q => q.status === 'complete') ? "#10b981" : "#8b5cf6",
+                                                        border: batchQueue.every(q => q.status === 'complete') ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(139, 92, 246, 0.3)",
+                                                        borderRadius: "100px",
+                                                        fontSize: "0.75rem",
+                                                        padding: "2px 8px",
+                                                        fontWeight: 600,
+                                                    }}
+                                                >
+                                                    {batchQueue.filter(q => q.status === 'complete').length}/{batchQueue.length} Done
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                                        {batchQueue.some(q => q.status === 'complete') && (
+                                            <>
+                                                <button
+                                                    onClick={copyAllBatchLinks}
+                                                    style={{
+                                                        background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                                                        border: "none",
+                                                        borderRadius: "10px",
+                                                        padding: "8px 16px",
+                                                        color: "#ffffff",
+                                                        fontSize: "0.82rem",
+                                                        fontWeight: 600,
+                                                        cursor: "pointer",
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
+                                                        whiteSpace: "nowrap",
+                                                        boxShadow: "0 4px 14px rgba(139, 92, 246, 0.3)",
+                                                        transition: "all 0.2s",
+                                                    }}
+                                                >
+                                                    {batchCopied ? <Check size={14} /> : <Copy size={14} />}
+                                                    <span>{batchCopied ? "Copied All!" : "Copy All Links"}</span>
+                                                </button>
+                                                <button
+                                                    onClick={copyAllMarkdown}
+                                                    style={{
+                                                        background: "rgba(255, 255, 255, 0.05)",
+                                                        border: "1px solid var(--border-color)",
+                                                        borderRadius: "10px",
+                                                        padding: "8px 14px",
+                                                        color: "var(--text-main)",
+                                                        fontSize: "0.82rem",
+                                                        fontWeight: 500,
+                                                        cursor: "pointer",
+                                                        display: "inline-flex",
+                                                        alignItems: "center",
+                                                        gap: "6px",
+                                                        whiteSpace: "nowrap",
+                                                        transition: "all 0.2s",
+                                                    }}
+                                                >
+                                                    <FileText size={14} color="#8b5cf6" />
+                                                    <span>Markdown</span>
+                                                </button>
+                                                {albumUrl && (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleShare(albumUrl, "PixEdge Album")}
+                                                            title="Share Album"
+                                                            style={{
+                                                                background: "rgba(139, 92, 246, 0.2)",
+                                                                border: "1px solid rgba(139, 92, 246, 0.4)",
+                                                                borderRadius: "10px",
+                                                                padding: "8px 12px",
+                                                                color: "var(--accent-primary)",
+                                                                fontSize: "0.82rem",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer",
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                gap: "6px",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            <Share2 size={14} />
+                                                            <span>Share Album</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(albumUrl);
+                                                                setAlbumCopied(true);
+                                                                setTimeout(() => setAlbumCopied(false), 2000);
+                                                            }}
+                                                            style={{
+                                                                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                                                                border: "none",
+                                                                borderRadius: "10px",
+                                                                padding: "8px 14px",
+                                                                color: "#ffffff",
+                                                                fontSize: "0.82rem",
+                                                                fontWeight: 700,
+                                                                cursor: "pointer",
+                                                                display: "inline-flex",
+                                                                alignItems: "center",
+                                                                gap: "6px",
+                                                                whiteSpace: "nowrap",
+                                                                boxShadow: "0 4px 12px rgba(139, 92, 246, 0.4)",
+                                                            }}
+                                                        >
+                                                            {albumCopied ? <CheckCheck size={14} /> : <FileArchive size={14} />}
+                                                            <span>{albumCopied ? "Album Copied!" : "Copy Album Link"}</span>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </>
+                                        )}
+                                        <button
+                                            onClick={() => setBatchQueue([])}
+                                            style={{
+                                                background: "rgba(255, 255, 255, 0.03)",
+                                                border: "1px solid var(--border-color)",
+                                                borderRadius: "10px",
+                                                padding: "8px 12px",
+                                                color: "var(--text-muted)",
+                                                fontSize: "0.82rem",
+                                                fontWeight: 500,
+                                                cursor: "pointer",
+                                                whiteSpace: "nowrap",
+                                                transition: "all 0.2s",
+                                            }}
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Queue Items Grid */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto", paddingRight: "4px" }}>
+                                    {batchQueue.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            style={{
+                                                background: "var(--input-bg)",
+                                                border: "1px solid var(--border-color)",
+                                                borderRadius: "14px",
+                                                padding: "12px 16px",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "space-between",
+                                                gap: "14px",
+                                                transition: "all 0.2s",
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+                                                {item.status === 'complete' ? (
+                                                    <div style={{ background: "rgba(16, 185, 129, 0.15)", padding: "6px", borderRadius: "8px", display: "flex" }}>
+                                                        <CheckCheck size={16} color="#10b981" />
+                                                    </div>
+                                                ) : item.status === 'error' ? (
+                                                    <div style={{ background: "rgba(239, 68, 68, 0.15)", padding: "6px", borderRadius: "8px", display: "flex" }}>
+                                                        <AlertCircle size={16} color="#ef4444" />
+                                                    </div>
+                                                ) : (
+                                                    <div style={{ background: "rgba(139, 92, 246, 0.15)", padding: "6px", borderRadius: "8px", display: "flex" }}>
+                                                        <ImageIcon size={16} color="#8b5cf6" />
+                                                    </div>
+                                                )}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-main)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                        {item.fileName}
+                                                    </div>
+                                                    {item.status === 'uploading' && (
+                                                        <div style={{ width: "100%", background: "rgba(255,255,255,0.08)", height: "5px", borderRadius: "100px", marginTop: "6px", overflow: "hidden" }}>
+                                                            <div style={{ width: `${item.progress}%`, background: "linear-gradient(90deg, #8b5cf6, #06b6d4)", height: "100%", transition: "width 0.2s" }} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                                                {item.status === 'complete' && item.url ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => handleShare(item.url!, item.fileName)}
+                                                            title="Share Link"
+                                                            style={{
+                                                                background: "rgba(139, 92, 246, 0.15)",
+                                                                border: "1px solid rgba(139, 92, 246, 0.3)",
+                                                                borderRadius: "8px",
+                                                                padding: "6px 9px",
+                                                                color: "var(--accent-primary)",
+                                                                cursor: "pointer",
+                                                                display: "flex",
+                                                                alignItems: "center",
+                                                                justifyContent: "center",
+                                                                transition: "all 0.2s",
+                                                            }}
+                                                        >
+                                                            <Share2 size={13} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                navigator.clipboard.writeText(item.url!);
+                                                            }}
+                                                            style={{
+                                                                background: "rgba(16, 185, 129, 0.15)",
+                                                                border: "1px solid rgba(16, 185, 129, 0.4)",
+                                                                borderRadius: "8px",
+                                                                padding: "6px 14px",
+                                                                color: "#10b981",
+                                                                fontSize: "0.8rem",
+                                                                fontWeight: 600,
+                                                                cursor: "pointer",
+                                                                transition: "all 0.2s",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            Copy Link
+                                                        </button>
+                                                    </>
+                                                ) : item.status === 'error' ? (
+                                                    <span style={{ fontSize: "0.78rem", color: "#ef4444", fontWeight: 500 }}>Failed</span>
+                                                ) : (
+                                                    <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", fontWeight: 500 }}>{item.progress}%</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Secret PIN / Password Protection (Optional) */}
+                    <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+                        <div
+                            style={{
+                                position: "absolute",
+                                left: "14px",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                color: password ? "var(--accent-primary)" : "var(--text-muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                pointerEvents: "none",
+                            }}
+                        >
+                            <Lock size={14} />
+                        </div>
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Secret PIN / Password Protection (Optional)"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            style={{
+                                width: "100%",
+                                background: "var(--input-bg)",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "16px",
+                                padding: "12px 46px 12px 40px",
+                                color: "var(--text-main)",
+                                fontSize: "0.9rem",
+                                outline: "none",
+                                transition: "all 0.2s",
+                                fontFamily: "inherit",
+                                boxSizing: "border-box" as const,
+                            }}
+                        />
+                        {password && (
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                style={{
+                                    position: "absolute",
+                                    right: "12px",
+                                    top: "50%",
+                                    transform: "translateY(-50%)",
+                                    background: "rgba(139, 92, 246, 0.25)",
+                                    border: "1px solid rgba(139, 92, 246, 0.5)",
+                                    borderRadius: "8px",
+                                    padding: "6px",
+                                    color: "#ffffff",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    transition: "all 0.2s",
+                                    boxShadow: "0 2px 8px rgba(139, 92, 246, 0.3)",
+                                    zIndex: 2,
+                                }}
+                                title={showPassword ? "Hide PIN" : "Show PIN"}
+                            >
+                                {showPassword ? <EyeOff size={14} color="#ffffff" /> : <Eye size={14} color="#ffffff" />}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* ID Error with Suggestions */}
+                    <AnimatePresence>
+                        {idError && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                style={{
+                                    background: "rgba(239, 68, 68, 0.08)",
+                                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                                    borderRadius: "16px",
+                                    padding: "1rem",
+                                    marginBottom: "1.5rem",
+                                }}
+                            >
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "12px" }}>
+                                    <AlertCircle size={18} style={{ color: "#f87171", flexShrink: 0, marginTop: "2px" }} />
+                                    <div style={{ flex: 1 }}>
+                                        <p style={{ color: "#f87171", fontWeight: 500, fontSize: "0.9rem", margin: 0 }}>
+                                            {idError.message}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => { setIdError(null); setPendingFile(null); }}
+                                        style={{
+                                            background: "transparent",
+                                            border: "none",
+                                            color: "#f87171",
+                                            cursor: "pointer",
+                                            padding: "2px",
+                                            display: "flex"
+                                        }}
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {idError.suggestions.length > 0 && (
+                                    <div style={{ marginBottom: "12px" }}>
+                                        <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginBottom: "8px" }}>
+                                            Try one of these instead:
+                                        </p>
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                                            {idError.suggestions.map((suggestion) => (
+                                                <motion.button
+                                                    key={suggestion}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    onClick={() => retryWithSuggestion(suggestion)}
+                                                    style={{
+                                                        background: "var(--input-bg)",
+                                                        border: "1px solid var(--border-color)",
+                                                        borderRadius: "10px",
+                                                        padding: "8px 14px",
+                                                        color: "var(--accent-primary)",
+                                                        fontSize: "0.85rem",
+                                                        fontWeight: 500,
+                                                        cursor: "pointer",
+                                                        fontFamily: "monospace",
+                                                        transition: "all 0.2s",
+                                                    }}
+                                                >
+                                                    {suggestion}
+                                                </motion.button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Retry with current custom name */}
+                                {pendingFile && customId && (
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => {
+                                            setIdError(null);
+                                            uploadFileWithId(pendingFile, customId);
+                                        }}
+                                        style={{
+                                            width: "100%",
+                                            padding: "10px 16px",
+                                            background: "var(--accent-primary)",
+                                            border: "none",
+                                            borderRadius: "10px",
+                                            color: "#fff",
+                                            fontSize: "0.85rem",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            fontFamily: "inherit",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            gap: "8px",
+                                        }}
+                                    >
+                                        <Upload size={16} />
+                                        Retry with "{customId}"
+                                    </motion.button>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Pending file retry (when error is dismissed but file still there) */}
+                    <AnimatePresence>
+                        {!idError && pendingFile && !uploading && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                style={{
+                                    background: "rgba(139, 92, 246, 0.08)",
+                                    border: "1px solid rgba(139, 92, 246, 0.2)",
+                                    borderRadius: "16px",
+                                    padding: "1rem",
+                                    marginBottom: "1.5rem",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "space-between",
+                                    gap: "12px",
+                                }}
+                            >
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+                                    <ImageIcon size={18} style={{ color: "var(--accent-primary)", flexShrink: 0 }} />
+                                    <span style={{
+                                        color: "var(--text-main)",
+                                        fontSize: "0.85rem",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap"
+                                    }}>
+                                        {pendingFile.name}
+                                    </span>
+                                </div>
+                                <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => {
+                                            if (customId) {
+                                                uploadFileWithId(pendingFile, customId);
+                                            } else {
+                                                uploadFile(pendingFile);
+                                            }
+                                        }}
+                                        style={{
+                                            padding: "8px 16px",
+                                            background: "var(--accent-primary)",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            color: "#fff",
+                                            fontSize: "0.8rem",
+                                            fontWeight: 500,
+                                            cursor: "pointer",
+                                            fontFamily: "inherit",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                        }}
+                                    >
+                                        <Upload size={14} />
+                                        Upload
+                                    </motion.button>
+                                    <button
+                                        onClick={() => setPendingFile(null)}
+                                        style={{
+                                            padding: "8px",
+                                            background: "var(--input-bg)",
+                                            border: "1px solid var(--border-color)",
+                                            borderRadius: "8px",
+                                            color: "var(--text-muted)",
+                                            cursor: "pointer",
+                                            display: "flex",
+                                        }}
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    <div
+                        className={`drop-zone ${isDragging ? "active" : ""}`}
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => document.getElementById("file-upload")?.click()}
+                    >
+                        <input
+                            type="file"
+                            id="file-upload"
+                            className="file-input"
+                            multiple={true}
+                            accept="image/*,video/*"
+                            onChange={(e) => {
+                                if (e.target.files && e.target.files.length > 0) {
+                                    const files = Array.from(e.target.files);
+                                    processBatchUpload(files);
+                                    e.target.value = ''; // Reset so same files can be re-selected
+                                }
+                            }}
+                        />
+
+                        <div className="upload-icon-container">
+                            <Upload size={24} />
+                        </div>
+
+                        <div className="upload-text">
+                            <h3>
+                                {uploading
+                                    ? uploadStatus
+                                    : "Drop image or video here"}
+                            </h3>
+                            <div
+                                style={{
+                                    color: "var(--text-muted)",
+                                    fontSize: "0.85rem",
+                                    marginTop: "6px",
+                                }}
+                            >
+                                {uploading ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                                        <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>{uploadProgress}%</span>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{ color: 'var(--text-main)', fontWeight: 500 }}>{uploadTransferred}</span>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{ color: '#10b981', fontWeight: 600, background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                                            ⚡ {uploadSpeed}
+                                        </span>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{uploadEta}</span>
+                                    </div>
+                                ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                        <span>or click to browse</span>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            background: 'rgba(139, 92, 246, 0.12)',
+                                            border: '1px solid rgba(139, 92, 246, 0.28)',
+                                            padding: '2px 8px',
+                                            borderRadius: '6px',
+                                            color: '#c4b5fd',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 600,
+                                        }}>
+                                            <kbd style={{ fontFamily: 'inherit', background: 'rgba(255,255,255,0.08)', padding: '1px 5px', borderRadius: '4px' }}>Ctrl</kbd>+<kbd style={{ fontFamily: 'inherit', background: 'rgba(255,255,255,0.08)', padding: '1px 5px', borderRadius: '4px' }}>V</kbd> to paste
+                                        </span>
+                                        <span style={{ opacity: 0.4 }}>•</span>
+                                        <span>up to 2 GB</span>
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+
+                        <AnimatePresence>
+                            {pasteToast && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '-42px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        background: 'rgba(18, 18, 24, 0.95)',
+                                        border: '1px solid rgba(139, 92, 246, 0.5)',
+                                        borderRadius: '50px',
+                                        padding: '6px 18px',
+                                        color: '#c4b5fd',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 600,
+                                        boxShadow: '0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(139,92,246,0.3)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        zIndex: 100,
+                                        pointerEvents: 'none',
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    <Sparkles size={14} color="#8b5cf6" />
+                                    <span>{pasteToast}</span>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {uploading && (
+                            <div className="progress-container">
+                                <div className="progress-bar">
+                                    <motion.div
+                                        className="progress-fill"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${uploadProgress}%` }}
+                                        transition={{
+                                            duration: 0.3,
+                                            ease: "easeOut",
+                                        }}
+                                    />
+                                </div>
+                                <div className="progress-glow" style={{
+                                    position: "absolute",
+                                    left: `${Math.min(uploadProgress, 98)}%`,
+                                    top: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    width: "20px",
+                                    height: "20px",
+                                    background: "var(--accent-primary)",
+                                    borderRadius: "50%",
+                                    filter: "blur(10px)",
+                                    opacity: uploadProgress < 100 ? 0.8 : 0,
+                                    transition: "opacity 0.3s",
+                                }} />
+                            </div>
+                        )}
+                    </div>
+
+                    <AnimatePresence>
+                        {result && (
+                            <motion.div
+                                className="result-area"
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                            >
+                                <div className="link-box">
+                                    <span className="link-text">{result.url}</span>
+                                    <div style={{ display: "flex", gap: "8px" }}>
+                                        <button
+                                            className="copy-btn"
+                                            style={{
+                                                background: "var(--input-bg)",
+                                                color: "var(--text-muted)",
+                                            }}
+                                            onClick={() => handleShare(result.url, `PixEdge | ${result.id}`)}
+                                            title="Share Link"
+                                        >
+                                            <Share2 size={18} />
+                                        </button>
+                                        <button
+                                            className="copy-btn"
+                                            style={{
+                                                background: "var(--input-bg)",
+                                                color: "var(--text-muted)",
+                                            }}
+                                            onClick={() => setShowQr(!showQr)}
+                                            title="Scan QR Code"
+                                        >
+                                            <QrCode size={18} />
+                                        </button>
+                                        <button
+                                            className="copy-btn"
+                                            onClick={() => copyToClipboard(result.url)}
+                                            title="Copy Link"
+                                        >
+                                            {copied ? <Check size={18} /> : <Copy size={18} />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {showQr && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        style={{
+                                            marginTop: "1.5rem",
+                                            display: "flex",
+                                            justifyContent: "center",
+                                            background: "white",
+                                            padding: "1.5rem",
+                                            borderRadius: "24px",
+                                            boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+                                        }}
+                                    >
+                                        <QRCodeSVG value={result.url} size={180} />
+                                    </motion.div>
+                                )}
+
+                                <div style={{ marginTop: "1rem", textAlign: "center" }}>
+                                    <a
+                                        href={result.url}
+                                        target="_blank"
+                                        style={{
+                                            color: "#8b5cf6",
+                                            fontSize: "0.8rem",
+                                            textDecoration: "none",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            justifyContent: "center",
+                                            gap: "4px",
+                                        }}
+                                    >
+                                        View Live Link <ExternalLink size={12} />
+                                    </a>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </motion.div>
+
+                {/* Telegram Bot CTA */}
+                <motion.a
+                    href="https://t.me/PixEdge_Bot"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.7 }}
+                    style={{
+                        marginTop: "2rem",
+                        marginBottom: "1rem",
+                        textDecoration: "none",
+                        width: "100%",
+                        maxWidth: "500px",
+                    }}
+                >
+                    <div
+                        style={{
+                            background: "rgba(59, 130, 246, 0.05)",
+                            border: "1px solid rgba(59, 130, 246, 0.2)",
+                            padding: "16px 20px",
+                            borderRadius: "20px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: "15px",
+                            transition: "all 0.2s",
+                        }}
+                        onMouseOver={(e: any) => {
+                            e.currentTarget.style.background = "rgba(59, 130, 246, 0.1)";
+                            e.currentTarget.style.borderColor = "rgba(59, 130, 246, 0.4)";
+                            e.currentTarget.style.transform = "translateY(-2px)";
+                        }}
+                        onMouseOut={(e: any) => {
+                            e.currentTarget.style.background = "rgba(59, 130, 246, 0.05)";
+                            e.currentTarget.style.borderColor = "rgba(59, 130, 246, 0.2)";
+                            e.currentTarget.style.transform = "translateY(0)";
+                        }}
+                    >
+                        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                            <div
+                                style={{
+                                    width: "40px",
+                                    height: "40px",
+                                    background: "#3b82f6",
+                                    borderRadius: "12px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    color: "white",
+                                }}
+                            >
+                                <MessageSquare size={20} fill="white" />
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                                <span
+                                    style={{
+                                        color: "var(--text-main)",
+                                        fontWeight: "600",
+                                        fontSize: "1rem",
+                                    }}
+                                >
+                                    Prefer Telegram?
+                                </span>
+                                <span
+                                    style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}
+                                >
+                                    Use our bot for instant uploads
+                                </span>
+                            </div>
+                        </div>
+                        <ArrowRight size={18} color="var(--text-muted)" />
+                    </div>
+                </motion.a>
+
+                {/* Recently Uploaded (Improved) */}
+                {history.length > 0 && (
+                    <div style={{ marginTop: "3rem", width: "100%", maxWidth: "500px" }}>
+                        <button
+                            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                            style={{
+                                width: "100%",
+                                background: "transparent",
+                                border: "1px solid var(--border-color)",
+                                padding: "12px",
+                                borderRadius: "100px",
+                                color: "var(--text-muted)",
+                                fontSize: "0.8rem",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "8px",
+                                transition: "all 0.2s",
+                            }}
+                            onMouseOver={(e) =>
+                                (e.currentTarget.style.background = "var(--input-bg)")
+                            }
+                            onMouseOut={(e) =>
+                                (e.currentTarget.style.background = "transparent")
+                            }
+                        >
+                            <History size={14} />
+                            {isHistoryOpen
+                                ? "Hide Recently Uploaded"
+                                : "Show Recently Uploaded"}
+                        </button>
+
+                        <AnimatePresence>
+                            {isHistoryOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    style={{ overflow: "hidden", padding: "1rem 0" }}
+                                >
+                                    <div
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "10px",
+                                        }}
+                                    >
+                                        {history.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                style={{
+                                                    background: "var(--history-item-bg)",
+                                                    padding: "8px 12px",
+                                                    borderRadius: "20px",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "space-between",
+                                                    border: "1px solid var(--border-color)",
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "12px",
+                                                        flex: 1,
+                                                        overflow: "hidden",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: "44px",
+                                                            height: "44px",
+                                                            borderRadius: "12px",
+                                                            overflow: "hidden",
+                                                            background: "rgba(139, 92, 246, 0.05)",
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        <img
+                                                            src={`/i/${item.id}.jpg`}
+                                                            alt="preview"
+                                                            style={{
+                                                                width: "100%",
+                                                                height: "100%",
+                                                                objectFit: "cover",
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            display: "flex",
+                                                            flexDirection: "column",
+                                                            overflow: "hidden",
+                                                        }}
+                                                    >
+                                                        <a
+                                                            href={`/i/${item.id}`}
+                                                            target="_blank"
+                                                            style={{
+                                                                color: "var(--text-main)",
+                                                                textDecoration: "none",
+                                                                fontSize: "0.85rem",
+                                                                fontWeight: "500",
+                                                                overflow: "hidden",
+                                                                textOverflow: "ellipsis",
+                                                                whiteSpace: "nowrap",
+                                                            }}
+                                                        >
+                                                            /i/{item.id}
+                                                        </a>
+                                                        <span
+                                                            style={{
+                                                                color: "var(--text-muted)",
+                                                                fontSize: "0.7rem",
+                                                            }}
+                                                        >
+                                                            {new Date(item.timestamp).toLocaleTimeString([], {
+                                                                hour: "2-digit",
+                                                                minute: "2-digit",
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => copyToClipboard(item.url)}
+                                                    style={{
+                                                        background: "rgba(139, 92, 246, 0.1)",
+                                                        border: "none",
+                                                        color: "#8b5cf6",
+                                                        padding: "8px",
+                                                        borderRadius: "12px",
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    <Copy size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                )}
+
+                {/* How It Works Section */}
+                <div style={{ marginTop: "4rem", width: "100%", maxWidth: "1000px" }}>
+                    <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+                        <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--accent-primary)", textTransform: "uppercase", letterSpacing: "1px" }}>
+                            Simple & Fast
+                        </span>
+                        <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--text-main)", margin: "0.5rem 0 0 0" }}>
+                            How PixEdge Works
+                        </h2>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(139, 92, 246, 0.25)">
+                            <motion.div
+                                variants={bounceUpIconVariant}
+                                style={{ width: "48px", height: "48px", borderRadius: "16px", background: "rgba(139, 92, 246, 0.15)", color: "#8b5cf6", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}
+                            >
+                                <Upload size={24} />
+                            </motion.div>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "var(--accent-primary)", textTransform: "uppercase" }}>Step 01</span>
+                            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-main)", margin: "4px 0 8px 0" }}>
+                                Drop or Select Media
+                            </h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                Drag & drop any photo, GIF, or 4K video up to 2 GB. Set an optional custom vanity URL or link expiry duration.
+                            </p>
+                        </SpotlightCard>
+
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(6, 182, 212, 0.25)">
+                            <motion.div
+                                variants={spinZapIconVariant}
+                                style={{ width: "48px", height: "48px", borderRadius: "16px", background: "rgba(6, 182, 212, 0.15)", color: "#06b6d4", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}
+                            >
+                                <Zap size={24} />
+                            </motion.div>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#06b6d4", textTransform: "uppercase" }}>Step 02</span>
+                            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-main)", margin: "4px 0 8px 0" }}>
+                                MTProto Edge Stream
+                            </h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                High-speed chunked streaming via pooled Telegram sockets with live speed tracking (MB/s) & progress indicators.
+                            </p>
+                        </SpotlightCard>
+
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(16, 185, 129, 0.25)">
+                            <motion.div
+                                variants={pulseGlobeIconVariant}
+                                style={{ width: "48px", height: "48px", borderRadius: "16px", background: "rgba(16, 185, 129, 0.15)", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "1.25rem" }}
+                            >
+                                <Globe size={24} />
+                            </motion.div>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#10b981", textTransform: "uppercase" }}>Step 03</span>
+                            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-main)", margin: "4px 0 8px 0" }}>
+                                Instant Global Sharing
+                            </h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                Share your custom vanity link with in-browser video scrubbing, volume persistence, and auto-deletion channel sync.
+                            </p>
+                        </SpotlightCard>
+                    </div>
+                </div>
+
+                {/* Developer & Integration Hub */}
+                <div style={{ marginTop: "4rem", width: "100%", maxWidth: "1000px" }}>
+                    <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
+                        <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#eab308", textTransform: "uppercase", letterSpacing: "1px" }}>
+                            Developer Ready
+                        </span>
+                        <h2 style={{ fontSize: "2rem", fontWeight: 800, color: "var(--text-main)", margin: "0.5rem 0 0 0" }}>
+                            Integrate PixEdge Anywhere
+                        </h2>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(139, 92, 246, 0.25)">
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-main)", fontWeight: 700, marginBottom: "8px" }}>
+                                <motion.div variants={codeWiggleIconVariant}>
+                                    <Code2 size={22} color="#8b5cf6" />
+                                </motion.div>
+                                REST API Upload
+                            </div>
+                            <p style={{ fontSize: "0.88rem", color: "var(--card-subtext)", lineHeight: "1.5" }}>
+                                Programmatically upload media via simple POST requests with API key authentication.
+                            </p>
+                            <Link
+                                href="/docs"
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    color: "var(--accent-primary)",
+                                    fontSize: "0.85rem",
+                                    fontWeight: 600,
+                                    textDecoration: "none",
+                                    marginTop: "8px",
+                                }}
+                            >
+                                View API Docs <ArrowRight size={14} />
+                            </Link>
+                        </SpotlightCard>
+
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(6, 182, 212, 0.25)">
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-main)", fontWeight: 700, marginBottom: "8px" }}>
+                                <motion.div variants={cameraPulseIconVariant}>
+                                    <ImageIcon size={22} color="#06b6d4" />
+                                </motion.div>
+                                ShareX 1-Click Integration
+                            </div>
+                            <p style={{ fontSize: "0.88rem", color: "var(--card-subtext)", lineHeight: "1.5" }}>
+                                Take desktop screenshots on Windows and automatically upload them to PixEdge using ShareX.
+                            </p>
+                            <Link
+                                href="/dashboard"
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    color: "#06b6d4",
+                                    fontSize: "0.85rem",
+                                    fontWeight: 600,
+                                    textDecoration: "none",
+                                    marginTop: "8px",
+                                }}
+                            >
+                                Get API Key in Dashboard <ArrowRight size={14} />
+                            </Link>
+                        </SpotlightCard>
+
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(16, 185, 129, 0.25)">
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-main)", fontWeight: 700, marginBottom: "8px" }}>
+                                <motion.div variants={chatBubbleIconVariant}>
+                                    <MessageSquare size={22} color="#10b981" />
+                                </motion.div>
+                                Telegram Bot Uploads
+                            </div>
+                            <p style={{ fontSize: "0.88rem", color: "var(--card-subtext)", lineHeight: "1.5" }}>
+                                Send media directly to our bot or reply with <code>/upload custom-slug</code> to host on the edge.
+                            </p>
+                            <a
+                                href="https://t.me/PixEdge_bot"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    color: "#10b981",
+                                    fontSize: "0.85rem",
+                                    fontWeight: 600,
+                                    textDecoration: "none",
+                                    marginTop: "8px",
+                                }}
+                            >
+                                Open @PixEdge_bot <ExternalLink size={14} />
+                            </a>
+                        </SpotlightCard>
+                    </div>
+                </div>
+
+                {/* Features Grid */}
+                <div style={{ marginTop: "4rem", width: "100%", maxWidth: "1000px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(139, 92, 246, 0.25)">
+                            <motion.div variants={spinZapIconVariant} style={{ marginBottom: "1.25rem", display: "inline-block" }}>
+                                <Zap size={28} color="#8b5cf6" />
+                            </motion.div>
+                            <h3 style={{ marginBottom: "0.8rem", color: "var(--text-main)" }}>Edge Delivery</h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                Direct-to-CDN redirection ensures your images and 4K videos load instantly for users globally.
+                            </p>
+                        </SpotlightCard>
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(6, 182, 212, 0.25)">
+                            <motion.div variants={bounceUpIconVariant} style={{ marginBottom: "1.25rem", display: "inline-block" }}>
+                                <Shield size={28} color="#06b6d4" />
+                            </motion.div>
+                            <h3 style={{ marginBottom: "0.8rem", color: "var(--text-main)" }}>Privacy Shield</h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                Advanced privacy protection that keeps your data sources secure, ensuring clean and anonymous sharing links.
+                            </p>
+                        </SpotlightCard>
+                        <SpotlightCard style={{ padding: "1.75rem" }} glowColor="rgba(234, 179, 8, 0.25)">
+                            <motion.div variants={codeWiggleIconVariant} style={{ marginBottom: "1.25rem", display: "inline-block" }}>
+                                <Code2 size={28} color="#eab308" />
+                            </motion.div>
+                            <h3 style={{ marginBottom: "0.8rem", color: "var(--text-main)" }}>Rich API</h3>
+                            <p style={{ color: "var(--card-subtext)", fontSize: "0.9rem", lineHeight: "1.5", margin: 0 }}>
+                                Fully documented REST API for programmatic uploads, custom vanity slugs, and metadata retrieval.
+                            </p>
+                        </SpotlightCard>
+                    </div>
+                </div>
+
+                <footer className="footer" style={{ marginTop: "4rem", width: "100%" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "20px",
+                            marginBottom: "1rem",
+                        }}
+                    >
+                        <Link href="/docs" style={{ color: "var(--text-muted)" }}>
+                            API Docs
+                        </Link>
+                        <Link href="/stats" style={{ color: "var(--text-muted)" }}>
+                            Platform Stats
+                        </Link>
+                        <a
+                            href="https://github.com/GeekLuffy/PixEdge"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--text-muted)" }}
+                        >
+                            GitHub
+                        </a>
+                        <a
+                            href="https://t.me/EdgeBots"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "var(--text-muted)" }}
+                        >
+                            Telegram Channel
+                        </a>
+                    </div>
+                    <div style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                        PixEdge v2.0 · Open Source Edge Media Host
+                    </div>
+                </footer>
+
+                {/* Toast System */}
+                <AnimatePresence>
+                    {showToast && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50, scale: 0.8 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 20, scale: 0.8 }}
+                            style={{
+                                position: "fixed",
+                                bottom: "3rem",
+                                background: "var(--toast-bg)",
+                                backdropFilter: "blur(20px)",
+                                border: "1px solid var(--border-color)",
+                                padding: "12px 24px",
+                                borderRadius: "100px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "12px",
+                                boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+                                zIndex: 1000,
+                                color: "var(--text-main)",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    background: "#10b981",
+                                    borderRadius: "50%",
+                                    padding: "4px",
+                                    display: "flex",
+                                }}
+                            >
+                                <Check size={14} color="white" strokeWidth={3} />
+                            </div>
+                            <span style={{ fontSize: "0.9rem", fontWeight: "500" }}>
+                                Copied to clipboard
+                            </span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </main>
+        </>
+    );
+}

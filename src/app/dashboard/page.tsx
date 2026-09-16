@@ -1,0 +1,4480 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+    User,
+    Mail,
+    LogOut,
+    ArrowLeft,
+    Save,
+    Loader2,
+    Shield,
+    Upload,
+    Image as ImageIcon,
+    CheckCircle,
+    AlertCircle,
+    Settings,
+    History,
+    BarChart3,
+    Key,
+    Copy,
+    Eye,
+    EyeOff,
+    RefreshCw,
+    Link2,
+    ExternalLink,
+    Globe,
+    Sun,
+    Moon,
+    Sparkles,
+    Trash2,
+    Download,
+    Video,
+    Check,
+    Folder,
+    FolderPlus,
+    Tag,
+    Filter,
+    Search,
+    Lock,
+    Share2,
+    X,
+    Maximize2,
+    Command,
+    ChevronLeft,
+    ChevronRight,
+    Flame,
+    QrCode,
+    Code2,
+    CheckSquare,
+    Square,
+    FileArchive,
+} from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import JSZip from "jszip";
+import Link from "next/link";
+
+// STYLES
+const styles = {
+    // Layout
+    page: {
+        minHeight: "100vh",
+        padding: "1.5rem",
+    },
+    container: {
+        maxWidth: "1100px",
+        margin: "0 auto",
+    },
+
+    // Header
+    header: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        marginBottom: "2rem",
+        flexWrap: "wrap" as const,
+        gap: "1rem",
+    },
+    backLink: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        color: "var(--text-muted)",
+        textDecoration: "none",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        transition: "color 0.2s",
+    },
+    headerActions: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.625rem",
+    },
+    iconButton: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "40px",
+        height: "40px",
+        background: "var(--panel-bg)",
+        backdropFilter: "blur(16px)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "12px",
+        color: "var(--text-muted)",
+        cursor: "pointer",
+        transition: "all 0.2s",
+    },
+    logoutButton: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.625rem 1rem",
+        background: "rgba(239, 68, 68, 0.08)",
+        border: "1px solid rgba(239, 68, 68, 0.15)",
+        borderRadius: "12px",
+        color: "#f87171",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "all 0.2s",
+    },
+
+    // Profile Hero
+    heroCard: {
+        background: "var(--panel-bg)",
+        backdropFilter: "blur(24px)",
+        WebkitBackdropFilter: "blur(24px)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "24px",
+        padding: "1.75rem",
+        marginBottom: "1.75rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "1.5rem",
+        flexWrap: "wrap" as const,
+    },
+    avatarWrapper: {
+        position: "relative" as const,
+    },
+    avatar: {
+        width: "72px",
+        height: "72px",
+        borderRadius: "50%",
+        border: "3px solid var(--accent-primary)",
+        objectFit: "cover" as const,
+    },
+    statusBadge: {
+        position: "absolute" as const,
+        bottom: "0",
+        right: "0",
+        width: "22px",
+        height: "22px",
+        background: "#10b981",
+        borderRadius: "50%",
+        border: "3px solid var(--bg-color)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    heroInfo: {
+        flex: 1,
+        minWidth: "200px",
+    },
+    heroName: {
+        fontSize: "1.5rem",
+        fontWeight: 700,
+        color: "var(--text-main)",
+        marginBottom: "0.25rem",
+    },
+    heroEmail: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        color: "var(--text-muted)",
+        fontSize: "0.875rem",
+    },
+    uploadButton: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.75rem 1.5rem",
+        background: "rgba(139, 92, 246, 0.15)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid rgba(139, 92, 246, 0.3)",
+        borderRadius: "14px",
+        color: "var(--accent-primary)",
+        fontWeight: 600,
+        fontSize: "0.9rem",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "all 0.25s ease",
+    },
+
+    // Tabs
+    tabsContainer: {
+        display: "flex",
+        gap: "0.5rem",
+        marginBottom: "1.75rem",
+        overflowX: "auto" as const,
+        paddingBottom: "0.25rem",
+    },
+    tab: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.5rem",
+        padding: "0.75rem 1.25rem",
+        background: "var(--panel-bg)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "100px",
+        color: "var(--text-muted)",
+        fontSize: "0.85rem",
+        fontWeight: 500,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        whiteSpace: "nowrap" as const,
+        transition: "all 0.2s",
+    },
+    tabActive: {
+        background: "rgba(139, 92, 246, 0.12)",
+        borderColor: "rgba(139, 92, 246, 0.25)",
+        color: "var(--accent-primary)",
+    },
+
+    // Stats Grid
+    statsGrid: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+        gap: "1rem",
+        marginBottom: "2rem",
+    },
+    statCard: {
+        background: "var(--panel-bg)",
+        backdropFilter: "blur(16px)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "20px",
+        padding: "1.25rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "1rem",
+        transition: "all 0.2s",
+    },
+    statIcon: {
+        width: "52px",
+        height: "52px",
+        borderRadius: "16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+    },
+    statValue: {
+        fontSize: "1.625rem",
+        fontWeight: 700,
+        color: "var(--text-main)",
+        marginBottom: "0.125rem",
+    },
+    statLabel: {
+        fontSize: "0.8rem",
+        color: "var(--text-muted)",
+    },
+
+    // Section Header
+    sectionHeader: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        marginBottom: "1.25rem",
+    },
+    sectionIcon: {
+        width: "40px",
+        height: "40px",
+        background: "rgba(139, 92, 246, 0.1)",
+        borderRadius: "12px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--accent-primary)",
+    },
+    sectionTitle: {
+        fontSize: "1.1rem",
+        fontWeight: 600,
+        color: "var(--text-main)",
+    },
+
+    // Upload Grid
+    uploadsGrid: {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+        gap: "1rem",
+    },
+    uploadCard: {
+        background: "var(--panel-bg)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "18px",
+        overflow: "hidden",
+        transition: "all 0.25s ease",
+        position: "relative" as const,
+    },
+    uploadPreview: {
+        width: "100%",
+        aspectRatio: "16/10",
+        overflow: "hidden",
+        background: "rgba(0,0,0,0.15)",
+        cursor: "pointer",
+        position: "relative" as const,
+    },
+    uploadImage: {
+        width: "100%",
+        height: "100%",
+        objectFit: "cover" as const,
+        transition: "transform 0.3s ease",
+    },
+    uploadInfo: {
+        padding: "1rem",
+    },
+    uploadTitle: {
+        fontSize: "0.85rem",
+        fontWeight: 600,
+        color: "var(--text-main)",
+        marginBottom: "0.4rem",
+        display: "flex",
+        alignItems: "center",
+        gap: "0.375rem",
+    },
+    uploadMeta: {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+    },
+    uploadDate: {
+        fontSize: "0.7rem",
+        color: "var(--text-muted)",
+    },
+    uploadViews: {
+        fontSize: "0.7rem",
+        color: "var(--accent-primary)",
+        fontWeight: 600,
+        display: "flex",
+        alignItems: "center",
+        gap: "0.25rem",
+    },
+
+    // Empty State
+    emptyState: {
+        textAlign: "center" as const,
+        padding: "4rem 2rem",
+        background: "var(--panel-bg)",
+        border: "1px dashed var(--border-color)",
+        borderRadius: "24px",
+    },
+    emptyIcon: {
+        width: "80px",
+        height: "80px",
+        background: "rgba(139, 92, 246, 0.08)",
+        borderRadius: "50%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        margin: "0 auto 1.5rem",
+        color: "var(--accent-primary)",
+    },
+    emptyTitle: {
+        fontSize: "1.125rem",
+        fontWeight: 600,
+        color: "var(--text-main)",
+        marginBottom: "0.5rem",
+    },
+    emptyText: {
+        color: "var(--text-muted)",
+        marginBottom: "1.5rem",
+    },
+
+    // Cards
+    card: {
+        background: "var(--panel-bg)",
+        backdropFilter: "blur(24px)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "24px",
+        padding: "1.75rem",
+        marginBottom: "1.5rem",
+    },
+    cardTitle: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.75rem",
+        marginBottom: "1.25rem",
+    },
+    cardIcon: {
+        width: "44px",
+        height: "44px",
+        background: "rgba(139, 92, 246, 0.1)",
+        borderRadius: "14px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--accent-primary)",
+    },
+    cardTitleText: {
+        fontSize: "1.1rem",
+        fontWeight: 600,
+        color: "var(--text-main)",
+    },
+    cardDescription: {
+        color: "var(--text-muted)",
+        lineHeight: 1.65,
+        fontSize: "0.9rem",
+        marginBottom: "1.5rem",
+    },
+
+    // API Key Box
+    apiKeyBox: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.625rem",
+        padding: "0.875rem 1rem",
+        background: "var(--input-bg)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "14px",
+    },
+    apiKeyText: {
+        flex: 1,
+        fontFamily: "'JetBrains Mono', monospace",
+        fontSize: "0.85rem",
+        color: "var(--text-main)",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    },
+    apiKeyButton: {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "36px",
+        height: "36px",
+        background: "rgba(139, 92, 246, 0.1)",
+        border: "none",
+        borderRadius: "10px",
+        color: "var(--text-muted)",
+        cursor: "pointer",
+        transition: "all 0.2s",
+    },
+
+    // Form Elements
+    inputGroup: {
+        marginBottom: "1rem",
+    },
+    inputLabel: {
+        display: "block",
+        fontSize: "0.75rem",
+        fontWeight: 600,
+        color: "var(--text-muted)",
+        marginBottom: "0.5rem",
+        textTransform: "uppercase" as const,
+        letterSpacing: "0.05em",
+    },
+    inputWrapper: {
+        position: "relative" as const,
+    },
+    inputIcon: {
+        position: "absolute" as const,
+        left: "1rem",
+        top: "50%",
+        transform: "translateY(-50%)",
+        color: "var(--text-muted)",
+        pointerEvents: "none" as const,
+    },
+    input: {
+        width: "100%",
+        padding: "0.875rem 1rem 0.875rem 3rem",
+        background: "var(--input-bg)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "14px",
+        color: "var(--text-main)",
+        fontSize: "0.9rem",
+        fontFamily: "inherit",
+        outline: "none",
+        transition: "border-color 0.2s",
+    },
+
+    // Buttons
+    primaryButton: {
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.5rem",
+        padding: "0.875rem",
+        background: "rgba(139, 92, 246, 0.12)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        border: "1px solid rgba(139, 92, 246, 0.25)",
+        borderRadius: "14px",
+        color: "var(--accent-primary)",
+        fontWeight: 600,
+        fontSize: "0.9rem",
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "all 0.25s ease",
+    },
+
+    // Alerts
+    successAlert: {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.625rem",
+        padding: "0.875rem 1rem",
+        background: "rgba(16, 185, 129, 0.1)",
+        border: "1px solid rgba(16, 185, 129, 0.2)",
+        borderRadius: "14px",
+        color: "#10b981",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        marginBottom: "1rem",
+    },
+
+    // Danger Zone
+    dangerZone: {
+        padding: "1.5rem",
+        background: "rgba(239, 68, 68, 0.05)",
+        border: "1px solid rgba(239, 68, 68, 0.12)",
+        borderRadius: "18px",
+        marginTop: "1.5rem",
+    },
+    dangerTitle: {
+        fontSize: "0.9rem",
+        fontWeight: 600,
+        color: "#f87171",
+        marginBottom: "0.5rem",
+    },
+    dangerText: {
+        fontSize: "0.85rem",
+        color: "var(--text-muted)",
+        marginBottom: "1rem",
+        lineHeight: 1.55,
+    },
+    dangerButton: {
+        padding: "0.75rem 1.25rem",
+        background: "transparent",
+        border: "1px solid rgba(239, 68, 68, 0.25)",
+        borderRadius: "12px",
+        color: "#f87171",
+        fontSize: "0.875rem",
+        fontWeight: 500,
+        cursor: "pointer",
+        fontFamily: "inherit",
+        transition: "all 0.2s",
+    },
+
+    // Loading
+    loadingContainer: {
+        display: "flex",
+        justifyContent: "center",
+        padding: "3rem",
+    },
+};
+
+// COMPONENT
+export default function DashboardPage() {
+    const { data: session, status, update } = useSession();
+    const router = useRouter();
+
+    const [activeTab, setActiveTab] = useState("overview");
+    const [name, setName] = useState("");
+    const [avatarInput, setAvatarInput] = useState("");
+    const [uploadingAvatar, setUploadingAvatar] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [success, setSuccess] = useState("");
+    const [apiKey, setApiKey] = useState<string | null>(null);
+    const [showKey, setShowKey] = useState(false);
+    const [generatingKey, setGeneratingKey] = useState(false);
+    const [uploads, setUploads] = useState<any[]>([]);
+    const [loadingUploads, setLoadingUploads] = useState(true);
+    const [theme, setTheme] = useState<"dark" | "light">("dark");
+    const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
+    // Keep track of active folder filter, search query, and modal popup state
+    const [selectedFolder, setSelectedFolder] = useState<string>("all");
+    const [searchFilter, setSearchFilter] = useState<string>("");
+    const [organizingItem, setOrganizingItem] = useState<any | null>(null);
+    const [folderInput, setFolderInput] = useState<string>("");
+    const [tagsInput, setTagsInput] = useState<string>("");
+    const [passwordInput, setPasswordInput] = useState<string>("");
+    const [showModalPassword, setShowModalPassword] = useState<boolean>(false);
+    const [burnViewModal, setBurnViewModal] = useState<boolean>(false);
+    const [burnDownloadModal, setBurnDownloadModal] = useState<boolean>(false);
+    const [savingOrg, setSavingOrg] = useState<boolean>(false);
+    const [qrModal, setQrModal] = useState<{ url: string; title: string } | null>(null);
+    const [copiedQr, setCopiedQr] = useState<boolean>(false);
+    const [embedModalItem, setEmbedModalItem] = useState<{ id: string; isVideo: boolean; title?: string } | null>(null);
+    const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
+
+    // Paste Upload State
+    const [pastingUpload, setPastingUpload] = useState<boolean>(false);
+    const [pasteUploadProgress, setPasteUploadProgress] = useState<number>(0);
+    const [pasteToast, setPasteToast] = useState<{ message: string; id?: string; url?: string; type?: 'info' | 'success' | 'error' } | null>(null);
+
+    // Batch Selection State
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [batchActionLoading, setBatchActionLoading] = useState<string | null>(null);
+    const [batchZipProgress, setBatchZipProgress] = useState<string | null>(null);
+    const [showBatchFolderModal, setShowBatchFolderModal] = useState<boolean>(false);
+    const [batchTargetFolder, setBatchTargetFolder] = useState<string>("");
+    const [showBatchTagsModal, setShowBatchTagsModal] = useState<boolean>(false);
+    const [batchTagsInput, setBatchTagsInput] = useState<string>("");
+    const [showBatchDeleteModal, setShowBatchDeleteModal] = useState<boolean>(false);
+
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+    // Simple copy link
+    const copyLink = (id: string) => {
+        navigator.clipboard.writeText(`${baseUrl}/i/${id}`);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    // Upload file directly from clipboard paste or drop on Dashboard
+    const handleDashboardPasteFile = async (file: File) => {
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) return;
+
+        if (file.size > 2 * 1024 * 1024 * 1024) {
+            alert("File too large. Maximum supported size is 2 GB.");
+            return;
+        }
+
+        let cleanFile = file;
+        if (!file.name || file.name === 'image.png' || file.name === 'blob') {
+            const ext = file.type.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+            const d = new Date();
+            const ts = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;
+            cleanFile = new File([file], `pasted_image_${ts}.${ext}`, { type: file.type });
+        }
+
+        setPastingUpload(true);
+        setPasteUploadProgress(0);
+        setPasteToast({ message: `Uploading pasted ${cleanFile.name}...`, type: 'info' });
+
+        const formData = new FormData();
+        formData.append("file", cleanFile);
+
+        try {
+            const result = await new Promise<any>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+                        setPasteUploadProgress(pct);
+                    }
+                });
+                xhr.addEventListener("load", () => {
+                    try {
+                        const json = JSON.parse(xhr.responseText);
+                        resolve(json);
+                    } catch {
+                        reject(new Error("Upload failed"));
+                    }
+                });
+                xhr.addEventListener("error", () => reject(new Error("Network error")));
+                xhr.open("POST", "/api/v1/upload");
+                xhr.send(formData);
+            });
+
+            if (result.success && result.data) {
+                const newUpload = {
+                    id: result.data.id,
+                    filename: cleanFile.name,
+                    size: cleanFile.size,
+                    type: cleanFile.type,
+                    views: 0,
+                    downloads: 0,
+                    created_at: Date.now(),
+                    url: result.data.url,
+                };
+                setUploads(prev => [newUpload, ...prev]);
+                setPasteToast({
+                    message: "Pasted image uploaded successfully!",
+                    id: result.data.id,
+                    url: result.data.url,
+                    type: 'success',
+                });
+                setTimeout(() => setPasteToast(null), 6000);
+            } else {
+                setPasteToast({ message: result.error?.message || "Paste upload failed.", type: 'error' });
+                setTimeout(() => setPasteToast(null), 4000);
+            }
+        } catch (err: any) {
+            setPasteToast({ message: err.message || "Failed to upload pasted image.", type: 'error' });
+            setTimeout(() => setPasteToast(null), 4000);
+        } finally {
+            setPastingUpload(false);
+            setPasteUploadProgress(0);
+        }
+    };
+
+    // Global paste listener on Dashboard
+    useEffect(() => {
+        const handleDashboardPaste = (e: ClipboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isTextInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+            if (isTextInput) return;
+
+            const clipboardData = e.clipboardData;
+            if (!clipboardData) return;
+
+            const filesToUpload: File[] = [];
+
+            if (clipboardData.files && clipboardData.files.length > 0) {
+                for (let i = 0; i < clipboardData.files.length; i++) {
+                    const f = clipboardData.files[i];
+                    if (f.type.startsWith("image/") || f.type.startsWith("video/")) {
+                        filesToUpload.push(f);
+                    }
+                }
+            }
+
+            if (filesToUpload.length === 0 && clipboardData.items) {
+                for (let i = 0; i < clipboardData.items.length; i++) {
+                    const item = clipboardData.items[i];
+                    if (item.kind === 'file') {
+                        const f = item.getAsFile();
+                        if (f && (f.type.startsWith("image/") || f.type.startsWith("video/"))) {
+                            filesToUpload.push(f);
+                        }
+                    }
+                }
+            }
+
+            if (filesToUpload.length > 0) {
+                e.preventDefault();
+                for (const f of filesToUpload) {
+                    handleDashboardPasteFile(f);
+                }
+            }
+        };
+
+        window.addEventListener("paste", handleDashboardPaste);
+        return () => window.removeEventListener("paste", handleDashboardPaste);
+    }, []);
+
+    // Native Web Share with fallback
+    const handleNativeShare = async (id: string, title?: string) => {
+        const url = `${baseUrl}/i/${id}`;
+        if (typeof navigator !== 'undefined' && navigator.share) {
+            try {
+                await navigator.share({
+                    title: title || `PixEdge | ${id}`,
+                    text: "Check out this media on PixEdge",
+                    url,
+                });
+            } catch (err: any) {
+                if (err?.name !== 'AbortError') {
+                    copyLink(id);
+                }
+            }
+        } else {
+            copyLink(id);
+        }
+    };
+
+    const handleShareFolderAsAlbum = async (folderName: string) => {
+        const folderItems = uploads.filter(u => u.folder === folderName);
+        if (folderItems.length === 0) return;
+
+        // Generate a clean, deterministic album ID based on user and folder name
+        const userSlug = session?.user?.email || session?.user?.name || "user";
+        const cleanUser = userSlug.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 10);
+        const cleanFolder = folderName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-");
+        const folderAlbumId = `f-${cleanUser}-${cleanFolder}`;
+
+        try {
+            const res = await fetch('/api/album/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customId: folderAlbumId,
+                    imageIds: folderItems.map(u => u.id),
+                    title: `${folderName}`,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.url) {
+                if (typeof navigator !== 'undefined' && navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: `Album: ${folderName}`,
+                            text: `Explore the "${folderName}" album on PixEdge`,
+                            url: data.url,
+                        });
+                        setSuccess(`Shared album "${folderName}"!`);
+                        setTimeout(() => setSuccess(""), 3500);
+                        return;
+                    } catch (err: any) {
+                        if (err?.name === 'AbortError') return;
+                    }
+                }
+                navigator.clipboard.writeText(data.url);
+                setSuccess(`Folder album link for "${folderName}" copied to clipboard!`);
+                setTimeout(() => setSuccess(""), 3500);
+            }
+        } catch (err) {
+            console.error("Failed to share album", err);
+        }
+    };
+
+    // Save folder category, tags, password protection, and burn-after-reading settings
+    const handleSaveOrganization = async () => {
+        if (!organizingItem) return;
+        setSavingOrg(true);
+        try {
+            const parsedTags = tagsInput
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean);
+
+            const res = await fetch('/api/user/organize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: organizingItem.id,
+                    folder: folderInput.trim(),
+                    tags: parsedTags,
+                    password: passwordInput,
+                    burnAfterView: burnViewModal,
+                    burnAfterDownload: burnDownloadModal,
+                }),
+            });
+
+            if (res.ok) {
+                // Instantly update the dashboard list so the UI stays snappy
+                setUploads(prev => prev.map(item => {
+                    if (item.id === organizingItem.id) {
+                        return {
+                            ...item,
+                            folder: folderInput.trim() || undefined,
+                            tags: parsedTags,
+                            password_hash: passwordInput.trim() ? 'protected' : (passwordInput === '' ? '' : item.password_hash),
+                            burn_after_view: burnViewModal,
+                            burn_after_download: burnDownloadModal,
+                        };
+                    }
+                    return item;
+                }));
+                setOrganizingItem(null);
+                setSuccess("Saved folder, tags & self-destruct settings!");
+                setTimeout(() => setSuccess(""), 3000);
+            }
+        } catch (e) {
+            console.error("Oops, couldn't save folder and tags:", e);
+        }
+        setSavingOrg(false);
+    };
+
+    // Batch Selection Helper Functions
+    const toggleSelect = (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setSelectedIds(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+        );
+    };
+
+    const handleSelectAll = () => {
+        const visibleIds = filteredUploads.map(u => u.id);
+        const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.includes(id));
+        if (allSelected) {
+            setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
+        } else {
+            setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+        }
+    };
+
+    const handleClearSelection = () => {
+        setSelectedIds([]);
+    };
+
+    // Batch Actions Handlers
+    const handleBatchDelete = async () => {
+        if (selectedIds.length === 0) return;
+        setBatchActionLoading('delete');
+        try {
+            const deletePromises = selectedIds.map(id =>
+                fetch(`/api/v1/delete/${id}`, { method: 'DELETE' })
+            );
+            await Promise.all(deletePromises);
+            setUploads(prev => prev.filter(u => !selectedIds.includes(u.id)));
+            setSuccess(`Deleted ${selectedIds.length} uploads.`);
+            setSelectedIds([]);
+            setShowBatchDeleteModal(false);
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error("Batch delete error", err);
+        }
+        setBatchActionLoading(null);
+    };
+
+    const handleBatchMoveFolder = async () => {
+        if (selectedIds.length === 0) return;
+        setBatchActionLoading('folder');
+        const folderVal = batchTargetFolder.trim();
+        try {
+            const updatePromises = selectedIds.map(id => {
+                const currentItem = uploads.find(u => u.id === id);
+                return fetch('/api/user/organize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id,
+                        folder: folderVal,
+                        tags: currentItem?.tags || [],
+                        burnAfterView: currentItem?.burn_after_view,
+                        burnAfterDownload: currentItem?.burn_after_download,
+                    }),
+                });
+            });
+            await Promise.all(updatePromises);
+
+            setUploads(prev => prev.map(item => {
+                if (selectedIds.includes(item.id)) {
+                    return { ...item, folder: folderVal || undefined };
+                }
+                return item;
+            }));
+
+            if (folderVal && !savedFolders.includes(folderVal)) {
+                setSavedFolders(prev => [...prev, folderVal].sort());
+            }
+
+            setSuccess(`Moved ${selectedIds.length} items to "${folderVal || 'Root'}"`);
+            setShowBatchFolderModal(false);
+            setBatchTargetFolder("");
+            setSelectedIds([]);
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error("Batch move error", err);
+        }
+        setBatchActionLoading(null);
+    };
+
+    const handleBatchAddTags = async () => {
+        if (selectedIds.length === 0) return;
+        setBatchActionLoading('tags');
+        const newTags = batchTagsInput
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+
+        try {
+            const updatePromises = selectedIds.map(id => {
+                const currentItem = uploads.find(u => u.id === id);
+                const mergedTags = Array.from(new Set([...(currentItem?.tags || []), ...newTags]));
+                return fetch('/api/user/organize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id,
+                        folder: currentItem?.folder || '',
+                        tags: mergedTags,
+                        burnAfterView: currentItem?.burn_after_view,
+                        burnAfterDownload: currentItem?.burn_after_download,
+                    }),
+                });
+            });
+            await Promise.all(updatePromises);
+
+            setUploads(prev => prev.map(item => {
+                if (selectedIds.includes(item.id)) {
+                    const mergedTags = Array.from(new Set([...(item.tags || []), ...newTags]));
+                    return { ...item, tags: mergedTags };
+                }
+                return item;
+            }));
+
+            setSuccess(`Added tags to ${selectedIds.length} items`);
+            setShowBatchTagsModal(false);
+            setBatchTagsInput("");
+            setSelectedIds([]);
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error("Batch tag error", err);
+        }
+        setBatchActionLoading(null);
+    };
+
+    const handleBatchDownloadZip = async () => {
+        if (selectedIds.length === 0) return;
+        setBatchActionLoading('zip');
+        setBatchZipProgress("Preparing...");
+
+        try {
+            const zip = new JSZip();
+            const selectedItems = uploads.filter(u => selectedIds.includes(u.id));
+            const folder = zip.folder("pixedge-selection");
+
+            for (let i = 0; i < selectedItems.length; i++) {
+                const item = selectedItems[i];
+                const isVid = item.metadata?.type?.startsWith('video/');
+                const ext = isVid ? 'mp4' : 'jpg';
+                const dlUrl = `/i/${item.id}.${ext}?download=1`;
+
+                setBatchZipProgress(`${i + 1}/${selectedItems.length}`);
+                const res = await fetch(dlUrl);
+                const blob = await res.blob();
+                folder?.file(`${item.folder ? `${item.folder}/` : ''}${item.id}.${ext}`, blob);
+            }
+
+            setBatchZipProgress("Zipping...");
+            const content = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(content);
+            link.download = `pixedge-batch-${Date.now()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setSuccess(`Downloaded ZIP (${selectedItems.length} files)`);
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error("Batch ZIP download error", err);
+        }
+        setBatchZipProgress(null);
+        setBatchActionLoading(null);
+    };
+
+    // Keep track of explicit saved folders and folder creation modal state
+    const [savedFolders, setSavedFolders] = useState<string[]>([]);
+    const [showCreateFolderModal, setShowCreateFolderModal] = useState<boolean>(false);
+    const [newFolderName, setNewFolderName] = useState<string>("");
+    const [creatingFolder, setCreatingFolder] = useState<boolean>(false);
+
+    // Fetch custom folders saved by the user
+    const fetchFolders = async () => {
+        try {
+            const res = await fetch("/api/user/folders");
+            const data = await res.json();
+            if (Array.isArray(data.folders)) {
+                setSavedFolders(data.folders);
+            }
+        } catch (e) {
+            console.error("Failed to fetch folders");
+        }
+    };
+
+    // Create a brand new folder
+    const handleCreateFolder = async () => {
+        const name = newFolderName.trim();
+        if (!name) return;
+        setCreatingFolder(true);
+        try {
+            const res = await fetch("/api/user/folders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name }),
+            });
+            if (res.ok) {
+                if (!savedFolders.includes(name)) {
+                    setSavedFolders(prev => [...prev, name].sort());
+                }
+                setSelectedFolder(name);
+                setShowCreateFolderModal(false);
+                setNewFolderName("");
+                setSuccess(`Created folder "${name}"`);
+                setTimeout(() => setSuccess(""), 3000);
+            }
+        } catch (e) {
+            console.error("Failed to create folder", e);
+        }
+        setCreatingFolder(false);
+    };
+
+    // Delete a saved folder
+    const handleDeleteFolder = async (folderName: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (!confirm(`Remove folder "${folderName}"? Uploaded files in this folder will remain intact.`)) return;
+        try {
+            const res = await fetch("/api/user/folders", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: folderName }),
+            });
+            if (res.ok) {
+                setSavedFolders(prev => prev.filter(f => f !== folderName));
+                if (selectedFolder === folderName) setSelectedFolder("all");
+                setSuccess(`Removed folder "${folderName}"`);
+                setTimeout(() => setSuccess(""), 3000);
+            }
+        } catch (e) {
+            console.error("Failed to delete folder", e);
+        }
+    };
+
+    // Extract unique folders created across all user uploads and saved folders
+    const allUserFolders = Array.from(
+        new Set([...savedFolders, ...uploads.map(u => u.folder).filter(Boolean)])
+    ).sort() as string[];
+
+    // Filter uploads dynamically based on selected folder and search term
+    const filteredUploads = uploads.filter(u => {
+        if (selectedFolder !== "all") {
+            if (selectedFolder === "__none__" && u.folder) return false;
+            if (selectedFolder !== "__none__" && u.folder !== selectedFolder) return false;
+        }
+
+        if (searchFilter.trim()) {
+            const q = searchFilter.toLowerCase().trim();
+            const matchId = u.id.toLowerCase().includes(q);
+            const matchFolder = u.folder?.toLowerCase().includes(q);
+            const matchTags = Array.isArray(u.tags) && u.tags.some((t: string) => t.toLowerCase().includes(q));
+            if (!matchId && !matchFolder && !matchTags) return false;
+        }
+
+        return true;
+    });
+
+    // Command Palette & Quick-Preview Lightbox State
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+    const [cmdQuery, setCmdQuery] = useState("");
+    const [lightboxItem, setLightboxItem] = useState<any | null>(null);
+    const [lightboxIndex, setLightboxIndex] = useState<number>(0);
+    const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+
+    // Format file size utility
+    const formatSize = (bytes: number) => {
+        if (!bytes) return "0 MB";
+        if (bytes < 1024) return `${bytes} B`;
+        if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+        return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    };
+
+    // Global Keyboard Listeners (Ctrl+K, Spacebar, Esc, Arrow Left/Right)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ctrl+K or Cmd+K to toggle Command Palette
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                setIsCommandPaletteOpen(prev => !prev);
+                return;
+            }
+
+            // Close active modals on Escape
+            if (e.key === 'Escape') {
+                if (isCommandPaletteOpen) setIsCommandPaletteOpen(false);
+                if (lightboxItem) setLightboxItem(null);
+                if (organizingItem) setOrganizingItem(null);
+                return;
+            }
+
+            // Spacebar quick-preview lightbox when a card is hovered
+            if (e.code === 'Space' && !lightboxItem && !isCommandPaletteOpen && !organizingItem) {
+                const activeTag = document.activeElement?.tagName.toLowerCase();
+                if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+
+                if (hoveredCardId && filteredUploads.length > 0) {
+                    const foundIdx = filteredUploads.findIndex(u => u.id === hoveredCardId);
+                    if (foundIdx !== -1) {
+                        e.preventDefault();
+                        setLightboxIndex(foundIdx);
+                        setLightboxItem(filteredUploads[foundIdx]);
+                    }
+                }
+                return;
+            }
+
+            // Left / Right arrows inside Lightbox
+            if (lightboxItem && filteredUploads.length > 0) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    setLightboxIndex(prev => {
+                        const newIdx = prev > 0 ? prev - 1 : filteredUploads.length - 1;
+                        setLightboxItem(filteredUploads[newIdx]);
+                        return newIdx;
+                    });
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    setLightboxIndex(prev => {
+                        const newIdx = prev < filteredUploads.length - 1 ? prev + 1 : 0;
+                        setLightboxItem(filteredUploads[newIdx]);
+                        return newIdx;
+                    });
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isCommandPaletteOpen, lightboxItem, organizingItem, hoveredCardId, filteredUploads]);
+
+    // Delete upload
+    const handleDelete = async (id: string) => {
+        setDeleting(true);
+        try {
+            const res = await fetch(`/api/v1/delete/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setUploads(uploads.filter(u => u.id !== id));
+                setDeleteConfirm(null);
+                setSuccess("Upload deleted successfully");
+                setTimeout(() => setSuccess(""), 3000);
+            }
+        } catch (e) {
+            console.error("Delete failed");
+        }
+        setDeleting(false);
+    };
+
+    // Load theme
+    useEffect(() => {
+        const savedTheme = localStorage.getItem("pixedge_theme") as "dark" | "light";
+        if (savedTheme) {
+            setTheme(savedTheme);
+            document.documentElement.setAttribute("data-theme", savedTheme);
+        }
+    }, []);
+
+    const toggleTheme = () => {
+        const newTheme = theme === "dark" ? "light" : "dark";
+        setTheme(newTheme);
+        document.documentElement.setAttribute("data-theme", newTheme);
+        localStorage.setItem("pixedge_theme", newTheme);
+    };
+
+    // Fetch API Key
+    const fetchApiKey = async () => {
+        try {
+            const res = await fetch("/api/user/apikey");
+            const data = await res.json();
+            setApiKey(data.key);
+        } catch (e) {
+            console.error("Failed to fetch API key");
+        }
+    };
+
+    // Fetch Uploads
+    const fetchUploads = async () => {
+        setLoadingUploads(true);
+        try {
+            const res = await fetch("/api/user/uploads");
+            const data = await res.json();
+            setUploads(data.uploads || []);
+        } catch (e) {
+            console.error("Failed to fetch uploads");
+        }
+        setLoadingUploads(false);
+    };
+
+    // Generate API Key
+    const generateApiKey = async () => {
+        setGeneratingKey(true);
+        try {
+            const res = await fetch("/api/user/apikey", { method: "POST" });
+            const data = await res.json();
+            setApiKey(data.key);
+            setSuccess("API Key generated!");
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (e) {
+            console.error("Failed to generate API key");
+        }
+        setGeneratingKey(false);
+    };
+
+    // Copy to clipboard
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        setSuccess("Copied to clipboard!");
+        setTimeout(() => setSuccess(""), 3000);
+    };
+
+    // Auth check
+    useEffect(() => {
+        if (status === "unauthenticated") {
+            router.push("/login");
+        }
+        if (session?.user?.name) {
+            setName(session.user.name);
+            if (session.user.image) {
+                setAvatarInput(session.user.image);
+            }
+            fetchApiKey();
+            fetchUploads();
+            fetchFolders();
+        }
+    }, [session, status, router]);
+
+    // Save profile with custom avatar
+    const handleSaveProfile = async () => {
+        setSaving(true);
+        setSuccess("");
+        try {
+            await fetch("/api/user/profile", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name, image: avatarInput }),
+            });
+            await update({ name, image: avatarInput });
+            setSuccess("Profile settings & avatar updated!");
+            setTimeout(() => setSuccess(""), 3000);
+        } catch (err) {
+            console.error(err);
+        }
+        setSaving(false);
+    };
+
+    const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploadingAvatar(true);
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const res = await fetch("/api/v1/upload", {
+                method: "POST",
+                body: formData,
+            });
+            const data = await res.json();
+            if (data.success && data.data?.direct_url) {
+                const newAvatarUrl = data.data.direct_url;
+                setAvatarInput(newAvatarUrl);
+                await fetch("/api/user/profile", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, image: newAvatarUrl }),
+                });
+                await update({ name, image: newAvatarUrl });
+                setSuccess("New profile picture uploaded & saved!");
+                setTimeout(() => setSuccess(""), 3000);
+            }
+        } catch (err) {
+            console.error("Avatar upload failed:", err);
+        }
+        setUploadingAvatar(false);
+    };
+
+    // Loading state
+    if (status === "loading") {
+        return (
+            <div style={{ ...styles.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Loader2 size={40} className="animate-spin" style={{ color: "var(--accent-primary)" }} />
+            </div>
+        );
+    }
+
+    if (!session) return null;
+
+    const user = session.user;
+    const avatarUrl =
+        user?.image ||
+        `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.name || "User")}&background=8b5cf6&color=fff&size=200`;
+
+    const tabs = [
+        { id: "overview", label: "Overview", icon: BarChart3 },
+        { id: "uploads", label: "My Uploads", icon: ImageIcon },
+        { id: "folders", label: "Folders", icon: Folder },
+        { id: "api", label: "API Keys", icon: Key },
+        { id: "settings", label: "Settings", icon: Settings },
+    ];
+
+    const stats = [
+        { icon: ImageIcon, value: uploads.length, label: "Total Uploads", color: "#8b5cf6" },
+        { icon: Eye, value: uploads.reduce((acc, u) => acc + (u.views || 0), 0), label: "Total Views", color: "#06b6d4" },
+        { icon: Key, value: apiKey ? "Active" : "None", label: "API Key", color: "#10b981" },
+        { icon: Globe, value: "Edge", label: "CDN Network", color: "#f59e0b" },
+    ];
+
+    // RENDER
+    return (
+        <div className="dashboard-page" style={styles.page}>
+            <div className="dashboard-container" style={styles.container}>
+                {/* Header */}
+                <header className="dashboard-header" style={styles.header}>
+                    <Link href="/" style={styles.backLink}>
+                        <ArrowLeft size={18} />
+                        Back to Home
+                    </Link>
+
+                    <div style={styles.headerActions}>
+                        <motion.button
+                            whileHover={{ scale: 1.03 }}
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => setIsCommandPaletteOpen(true)}
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "6px 14px",
+                                background: theme === "dark" ? "rgba(18, 18, 22, 0.75)" : "var(--panel-bg)",
+                                backdropFilter: "blur(16px)",
+                                WebkitBackdropFilter: "blur(16px)",
+                                border: "1px solid var(--border-color)",
+                                borderRadius: "12px",
+                                color: "var(--text-muted)",
+                                cursor: "pointer",
+                                fontSize: "0.825rem",
+                                fontFamily: "inherit",
+                                transition: "all 0.2s ease",
+                            }}
+                        >
+                            <Search size={14} style={{ color: "var(--accent-primary)" }} />
+                            <span className="mobile-hide">Command Palette</span>
+                            <kbd
+                                style={{
+                                    background: theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.06)",
+                                    border: theme === "dark" ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.12)",
+                                    borderRadius: "6px",
+                                    padding: "2px 6px",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    fontFamily: "monospace",
+                                    color: "var(--text-main)",
+                                }}
+                            >
+                                Ctrl K
+                            </kbd>
+                        </motion.button>
+
+                        <motion.button
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={toggleTheme}
+                            style={styles.iconButton}
+                        >
+                            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+                        </motion.button>
+
+                        <motion.button
+                            className="dashboard-logout-btn"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => signOut({ callbackUrl: "/" })}
+                            style={styles.logoutButton}
+                        >
+                            <LogOut size={16} />
+                            <span className="dashboard-logout-text">Sign Out</span>
+                        </motion.button>
+                    </div>
+                </header>
+
+                {/* Profile Hero Banner */}
+                <motion.div
+                    className="dashboard-hero"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    style={{
+                        position: "relative",
+                        background: theme === "dark"
+                            ? "linear-gradient(135deg, rgba(20, 20, 30, 0.75) 0%, rgba(35, 20, 55, 0.65) 100%)"
+                            : "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(243, 232, 255, 0.9) 100%)",
+                        backdropFilter: "blur(30px)",
+                        WebkitBackdropFilter: "blur(30px)",
+                        border: theme === "dark"
+                            ? "1px solid rgba(139, 92, 246, 0.25)"
+                            : "1px solid rgba(139, 92, 246, 0.2)",
+                        borderRadius: "28px",
+                        padding: "2rem",
+                        marginBottom: "2rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "1.75rem",
+                        flexWrap: "wrap",
+                        overflow: "hidden",
+                        boxShadow: theme === "dark"
+                            ? "0 20px 50px rgba(0,0,0,0.3)"
+                            : "0 10px 30px rgba(139, 92, 246, 0.08)",
+                    }}
+                >
+                    {/* Ambient Glow Effect */}
+                    <div
+                        style={{
+                            position: "absolute",
+                            top: "-40px",
+                            left: "-40px",
+                            width: "200px",
+                            height: "200px",
+                            background: "rgba(139, 92, 246, 0.25)",
+                            borderRadius: "50%",
+                            filter: "blur(60px)",
+                            pointerEvents: "none",
+                        }}
+                    />
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap", zIndex: 1 }}>
+                        <div style={{ position: "relative" }}>
+                            <img
+                                className="dashboard-hero-avatar"
+                                src={avatarUrl}
+                                alt={user?.name || "User"}
+                                style={{
+                                    width: "80px",
+                                    height: "80px",
+                                    borderRadius: "50%",
+                                    border: "3px solid #8b5cf6",
+                                    boxShadow: "0 0 25px rgba(139, 92, 246, 0.4)",
+                                    objectFit: "cover",
+                                }}
+                            />
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    bottom: "2px",
+                                    right: "2px",
+                                    width: "22px",
+                                    height: "22px",
+                                    background: "#10b981",
+                                    borderRadius: "50%",
+                                    border: "3px solid var(--bg-color)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: "0 0 10px #10b981",
+                                }}
+                                title="Verified Account"
+                            >
+                                <CheckCircle size={12} color="white" />
+                            </div>
+                        </div>
+
+                        <div className="dashboard-hero-info">
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "8px" }}>
+                                <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-main)", margin: 0, letterSpacing: "-0.5px" }}>
+                                    {user?.name || "User"}
+                                </h1>
+                                <span
+                                    style={{
+                                        fontSize: "0.75rem",
+                                        fontWeight: 700,
+                                        background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                                        color: "#ffffff",
+                                        padding: "4px 12px",
+                                        borderRadius: "20px",
+                                        boxShadow: "0 4px 12px rgba(139, 92, 246, 0.3)",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "5px",
+                                    }}
+                                >
+                                    <Sparkles size={12} /> PRO TIER
+                                </span>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                <p style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "0.9rem", margin: 0 }}>
+                                    <Mail size={14} style={{ color: "var(--accent-primary)" }} />
+                                    {user?.email}
+                                </p>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                    <span
+                                        style={{
+                                            fontSize: "0.75rem",
+                                            color: "#10b981",
+                                            background: "rgba(16, 185, 129, 0.12)",
+                                            border: "1px solid rgba(16, 185, 129, 0.25)",
+                                            padding: "3px 10px",
+                                            borderRadius: "12px",
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        ⚡ 2 GB Edge Storage
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontSize: "0.75rem",
+                                            color: "#3b82f6",
+                                            background: "rgba(59, 130, 246, 0.12)",
+                                            border: "1px solid rgba(59, 130, 246, 0.25)",
+                                            padding: "3px 10px",
+                                            borderRadius: "12px",
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        🌐 Global CDN
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Hero Action Shortcuts */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", zIndex: 1, flexWrap: "wrap" }}>
+                        <Link href="/">
+                            <motion.button
+                                whileHover={{ scale: 1.03, y: -2 }}
+                                whileTap={{ scale: 0.97 }}
+                                style={{
+                                    background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                                    border: "none",
+                                    borderRadius: "14px",
+                                    color: "#fff",
+                                    padding: "10px 20px",
+                                    fontWeight: 700,
+                                    fontSize: "0.9rem",
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    fontFamily: "inherit",
+                                    boxShadow: "0 8px 25px rgba(139, 92, 246, 0.35)",
+                                }}
+                            >
+                                <Upload size={18} />
+                                + New Upload
+                            </motion.button>
+                        </Link>
+                        <span
+                            title="Copy any image or screenshot and press Ctrl+V anywhere on this page to upload instantly"
+                            style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                background: "rgba(139, 92, 246, 0.1)",
+                                border: "1px solid rgba(139, 92, 246, 0.25)",
+                                padding: "8px 14px",
+                                borderRadius: "14px",
+                                color: "#c4b5fd",
+                                fontSize: "0.82rem",
+                                fontWeight: 500,
+                            }}
+                        >
+                            <kbd style={{ background: "rgba(255, 255, 255, 0.08)", border: "1px solid rgba(255, 255, 255, 0.12)", padding: "2px 6px", borderRadius: "5px", color: "#fff", fontWeight: 700, fontSize: "0.75rem", fontFamily: "inherit" }}>Ctrl+V</kbd>
+                            <span>paste to upload</span>
+                        </span>
+                    </div>
+                </motion.div>
+
+                {/* Tabs */}
+                <div className="dashboard-tabs" style={styles.tabsContainer}>
+                    {tabs.map((tab) => (
+                        <motion.button
+                            key={tab.id}
+                            className="dashboard-tab"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setActiveTab(tab.id)}
+                            style={{
+                                ...styles.tab,
+                                ...(activeTab === tab.id ? styles.tabActive : {}),
+                            }}
+                        >
+                            <tab.icon size={16} />
+                            <span className="dashboard-tab-label">{tab.label}</span>
+                        </motion.button>
+                    ))}
+                </div>
+
+                {/* Content */}
+                <AnimatePresence mode="wait">
+                    {/* OVERVIEW TAB */}
+                    {activeTab === "overview" && (
+                        <motion.div
+                            key="overview"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            {/* Upgraded Stats Cards */}
+                            <div className="dashboard-stats" style={styles.statsGrid}>
+                                {stats.map((stat, idx) => (
+                                    <motion.div
+                                        key={stat.label}
+                                        className="dashboard-stat-card"
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: idx * 0.08 }}
+                                        whileHover={{ y: -4, borderColor: "rgba(139, 92, 246, 0.4)" }}
+                                        style={{
+                                            ...styles.statCard,
+                                            background: "var(--panel-bg)",
+                                            backdropFilter: "blur(24px)",
+                                            border: "1px solid var(--border-color)",
+                                            borderRadius: "22px",
+                                            padding: "1.35rem",
+                                            boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+                                        }}
+                                    >
+                                        <div
+                                            className="dashboard-stat-icon"
+                                            style={{
+                                                width: "54px",
+                                                height: "54px",
+                                                borderRadius: "16px",
+                                                background: `linear-gradient(135deg, ${stat.color}25 0%, ${stat.color}10 100%)`,
+                                                border: `1px solid ${stat.color}40`,
+                                                color: stat.color,
+                                                display: "flex",
+                                                alignItems: "center",
+                                                justifyContent: "center",
+                                                flexShrink: 0,
+                                            }}
+                                        >
+                                            <stat.icon size={26} />
+                                        </div>
+                                        <div>
+                                            <div className="dashboard-stat-value" style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--text-main)", lineHeight: 1, marginBottom: "4px" }}>
+                                                {stat.value}
+                                            </div>
+                                            <div className="dashboard-stat-label" style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-muted)" }}>
+                                                {stat.label}
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            {/* Recent Activity */}
+                            <div className="dashboard-section-header" style={styles.sectionHeader}>
+                                <div className="dashboard-section-icon" style={styles.sectionIcon}>
+                                    <History size={18} />
+                                </div>
+                                <h2 className="dashboard-section-title" style={styles.sectionTitle}>Recent Activity</h2>
+                            </div>
+
+                            {loadingUploads ? (
+                                <div style={styles.loadingContainer}>
+                                    <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent-primary)" }} />
+                                </div>
+                            ) : uploads.length > 0 ? (
+                                <div className="dashboard-uploads" style={styles.uploadsGrid}>
+                                    {uploads.slice(0, 4).map((upload, idx) => (
+                                        <motion.div
+                                            key={upload.id}
+                                            className="dashboard-upload-card"
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            whileHover={{ y: -4, borderColor: "rgba(139, 92, 246, 0.35)" }}
+                                            onClick={() => window.open(`/i/${upload.id}`, "_blank")}
+                                            style={styles.uploadCard}
+                                        >
+                                            <div style={styles.uploadPreview}>
+                                                <img
+                                                    src={`/i/${upload.id}.jpg`}
+                                                    alt={upload.id}
+                                                    style={styles.uploadImage}
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src =
+                                                            "https://placehold.co/400x250/1a1a1a/444?text=Preview";
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="dashboard-upload-info" style={styles.uploadInfo}>
+                                                <div className="dashboard-upload-title" style={styles.uploadTitle}>
+                                                    <Link2 size={12} style={{ color: "var(--accent-primary)" }} />
+                                                    /{upload.id}
+                                                </div>
+                                                <div style={styles.uploadMeta}>
+                                                    <span style={styles.uploadDate}>{new Date(upload.created_at).toLocaleDateString()}</span>
+                                                    <span style={styles.uploadViews}>
+                                                        <Eye size={10} />
+                                                        {upload.views}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="dashboard-empty" style={styles.emptyState}>
+                                    <div className="dashboard-empty-icon" style={styles.emptyIcon}>
+                                        <ImageIcon size={36} />
+                                    </div>
+                                    <h3 className="dashboard-empty-title" style={styles.emptyTitle}>No uploads yet</h3>
+                                    <p style={styles.emptyText}>Your uploaded media will appear here</p>
+                                    <Link href="/">
+                                        <motion.button className="dashboard-btn-primary" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} style={styles.uploadButton}>
+                                            <Upload size={18} />
+                                            Start Uploading
+                                        </motion.button>
+                                    </Link>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* UPLOADS TAB */}
+                    {activeTab === "uploads" && (
+                        <motion.div
+                            key="uploads"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <div className="dashboard-section-header" style={styles.sectionHeader}>
+                                <div className="dashboard-section-icon" style={styles.sectionIcon}>
+                                    <ImageIcon size={18} />
+                                </div>
+                                <h2 className="dashboard-section-title" style={styles.sectionTitle}>
+                                    My Uploads ({filteredUploads.length}{filteredUploads.length !== uploads.length ? ` of ${uploads.length}` : ''})
+                                </h2>
+                            </div>
+
+                            {/* Search and Folder filter controls */}
+                            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '1.5rem', alignItems: 'center' }}>
+                                <div style={{ position: 'relative', flex: '1 1 240px' }}>
+                                    <Search size={14} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search by ID, folder, or tag..."
+                                        value={searchFilter}
+                                        onChange={(e) => setSearchFilter(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--panel-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '9px 36px 9px 36px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                    {searchFilter && (
+                                        <X
+                                            size={14}
+                                            onClick={() => setSearchFilter('')}
+                                            style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', cursor: 'pointer' }}
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Folder Pills & Create Folder Button */}
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '8px',
+                                    overflowX: 'auto',
+                                    paddingBottom: '6px',
+                                    maxWidth: '100%',
+                                    alignItems: 'center',
+                                    scrollbarWidth: 'thin',
+                                    WebkitOverflowScrolling: 'touch',
+                                }}>
+                                    <button
+                                        onClick={() => setSelectedFolder('all')}
+                                        style={{
+                                            padding: '7px 14px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 500,
+                                            cursor: 'pointer',
+                                            border: `1px solid ${selectedFolder === 'all' ? 'rgba(139, 92, 246, 0.4)' : 'var(--border-color)'}`,
+                                            background: selectedFolder === 'all' ? 'rgba(139, 92, 246, 0.15)' : 'var(--panel-bg)',
+                                            color: selectedFolder === 'all' ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                            fontFamily: 'inherit',
+                                            whiteSpace: 'nowrap',
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        All ({uploads.length})
+                                    </button>
+
+                                    {allUserFolders.map(folderName => {
+                                        const count = uploads.filter(u => u.folder === folderName).length;
+                                        const isSelected = selectedFolder === folderName;
+                                        return (
+                                            <div
+                                                key={folderName}
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    borderRadius: '12px',
+                                                    border: `1px solid ${isSelected ? 'rgba(139, 92, 246, 0.4)' : 'var(--border-color)'}`,
+                                                    background: isSelected ? 'rgba(139, 92, 246, 0.15)' : 'var(--panel-bg)',
+                                                    color: isSelected ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 500,
+                                                    whiteSpace: 'nowrap',
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                <button
+                                                    onClick={() => setSelectedFolder(folderName)}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: 'inherit',
+                                                        padding: '7px 10px 7px 14px',
+                                                        fontSize: 'inherit',
+                                                        fontWeight: 'inherit',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        fontFamily: 'inherit',
+                                                        whiteSpace: 'nowrap',
+                                                    }}
+                                                >
+                                                    <Folder size={13} /> {folderName} ({count})
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDeleteFolder(folderName, e)}
+                                                    title={`Delete folder "${folderName}"`}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: 'var(--text-muted)',
+                                                        padding: '7px 10px 7px 2px',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        transition: 'color 0.2s',
+                                                    }}
+                                                    onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
+                                                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                                                >
+                                                    <X size={13} />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* + New Folder Button */}
+                                    <button
+                                        onClick={() => setShowCreateFolderModal(true)}
+                                        style={{
+                                            padding: '7px 14px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.8rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            border: '1px dashed rgba(139, 92, 246, 0.5)',
+                                            background: 'rgba(139, 92, 246, 0.08)',
+                                            color: 'var(--accent-primary)',
+                                            fontFamily: 'inherit',
+                                            whiteSpace: 'nowrap',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <FolderPlus size={13} /> + New Folder
+                                    </button>
+
+                                    {/* Select All Toggle Button */}
+                                    {filteredUploads.length > 0 && (
+                                        <button
+                                            onClick={handleSelectAll}
+                                            style={{
+                                                padding: '7px 14px',
+                                                borderRadius: '12px',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 500,
+                                                cursor: 'pointer',
+                                                border: `1px solid ${selectedIds.length > 0 ? 'rgba(139, 92, 246, 0.5)' : 'var(--border-color)'}`,
+                                                background: selectedIds.length > 0 ? 'rgba(139, 92, 246, 0.15)' : 'var(--panel-bg)',
+                                                color: selectedIds.length > 0 ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                                fontFamily: 'inherit',
+                                                whiteSpace: 'nowrap',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                flexShrink: 0,
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            {filteredUploads.length > 0 && filteredUploads.every(u => selectedIds.includes(u.id)) ? (
+                                                <><CheckSquare size={13} color="var(--accent-primary)" /> Deselect All</>
+                                            ) : (
+                                                <><Square size={13} /> Select All ({filteredUploads.length})</>
+                                            )}
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {loadingUploads ? (
+                                <div style={styles.loadingContainer}>
+                                    <Loader2 size={32} className="animate-spin" style={{ color: "var(--accent-primary)" }} />
+                                </div>
+                            ) : filteredUploads.length > 0 ? (
+                                <div className="dashboard-uploads" style={styles.uploadsGrid}>
+                                    {filteredUploads.map((upload, idx) => {
+                                        const isVideo = upload.metadata?.type?.startsWith('video/');
+                                        const isSelected = selectedIds.includes(upload.id);
+                                        const isCheckboxVisible = selectedIds.length > 0 || hoveredCardId === upload.id || isSelected;
+
+                                        return (
+                                        <motion.div
+                                            key={upload.id}
+                                            className="dashboard-upload-card"
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: idx * 0.03 }}
+                                            style={{
+                                                ...styles.uploadCard,
+                                                border: isSelected ? '2px solid var(--accent-primary)' : styles.uploadCard.border,
+                                                background: isSelected ? 'rgba(139, 92, 246, 0.08)' : styles.uploadCard.background,
+                                                boxShadow: isSelected ? '0 0 25px rgba(139, 92, 246, 0.25)' : undefined,
+                                                position: 'relative',
+                                            }}
+                                            onMouseEnter={() => setHoveredCardId(upload.id)}
+                                            onMouseLeave={() => setHoveredCardId(null)}
+                                        >
+                                            {/* Selection Checkbox */}
+                                            <div
+                                                onClick={(e) => toggleSelect(upload.id, e)}
+                                                title={isSelected ? "Deselect" : "Select"}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '8px',
+                                                    left: '8px',
+                                                    width: '24px',
+                                                    height: '24px',
+                                                    borderRadius: '7px',
+                                                    background: isSelected ? 'var(--accent-primary)' : 'rgba(0, 0, 0, 0.65)',
+                                                    backdropFilter: 'blur(8px)',
+                                                    border: isSelected ? '1px solid var(--accent-primary)' : '1px solid rgba(255, 255, 255, 0.3)',
+                                                    display: isCheckboxVisible ? 'flex' : 'none',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    zIndex: 10,
+                                                    transition: 'all 0.15s ease',
+                                                    color: '#fff',
+                                                    boxShadow: isSelected ? '0 4px 12px rgba(139, 92, 246, 0.4)' : 'none',
+                                                }}
+                                            >
+                                                {isSelected ? <Check size={14} strokeWidth={3} /> : null}
+                                            </div>
+
+                                            {/* Preview */}
+                                            <div 
+                                                style={{ ...styles.uploadPreview, cursor: "pointer" }}
+                                                onClick={() => {
+                                                    setLightboxIndex(idx);
+                                                    setLightboxItem(upload);
+                                                }}
+                                            >
+                                                {isVideo ? (
+                                                    <video
+                                                        src={`/i/${upload.id}.mp4`}
+                                                        style={styles.uploadImage}
+                                                        muted
+                                                        playsInline
+                                                        onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                                                        onMouseLeave={(e) => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; }}
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={`/i/${upload.id}.jpg`}
+                                                        alt={upload.id}
+                                                        style={styles.uploadImage}
+                                                        onError={(e) => {
+                                                             (e.target as HTMLImageElement).src =
+                                                                "https://placehold.co/400x250/1a1a1a/444?text=Preview";
+                                                        }}
+                                                    />
+                                                )}
+
+                                                {/* Hover Quick Preview Pill */}
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    background: 'rgba(0, 0, 0, 0.45)',
+                                                    opacity: hoveredCardId === upload.id ? 1 : 0,
+                                                    transition: 'opacity 0.2s ease',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    pointerEvents: 'none',
+                                                    zIndex: 5,
+                                                }}>
+                                                    <span style={{
+                                                        background: 'rgba(18, 18, 22, 0.85)',
+                                                        backdropFilter: 'blur(12px)',
+                                                        WebkitBackdropFilter: 'blur(12px)',
+                                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                        color: '#ffffff',
+                                                        padding: '6px 14px',
+                                                        borderRadius: '50px',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 600,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 8px 20px rgba(0,0,0,0.4)',
+                                                    }}>
+                                                        <Maximize2 size={13} color="#8b5cf6" /> Space Preview
+                                                    </span>
+                                                </div>
+
+                                                {isVideo && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '8px',
+                                                        left: isCheckboxVisible ? '38px' : '8px',
+                                                        background: 'rgba(0,0,0,0.7)',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.7rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        color: '#fff',
+                                                        zIndex: 6,
+                                                        transition: 'left 0.15s ease',
+                                                    }}>
+                                                        <Video size={10} /> Video
+                                                    </div>
+                                                )}
+                                                {upload.password_hash && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '8px',
+                                                        right: '8px',
+                                                        background: 'rgba(139, 92, 246, 0.85)',
+                                                        backdropFilter: 'blur(8px)',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.7rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                        zIndex: 6,
+                                                    }}>
+                                                        <Lock size={10} /> Protected
+                                                    </div>
+                                                )}
+                                                {(upload.burn_after_view || upload.burn_after_download) && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '8px',
+                                                        right: upload.password_hash ? '84px' : '8px',
+                                                        background: 'rgba(239, 68, 68, 0.85)',
+                                                        backdropFilter: 'blur(8px)',
+                                                        padding: '4px 8px',
+                                                        borderRadius: '6px',
+                                                        fontSize: '0.7rem',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        color: '#fff',
+                                                        fontWeight: 600,
+                                                        zIndex: 6,
+                                                    }}>
+                                                        <Flame size={10} /> {upload.burn_after_view ? 'Burn View' : 'Burn DL'}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Info */}
+                                            <div className="dashboard-upload-info" style={styles.uploadInfo}>
+                                                <div style={styles.uploadTitle}>
+                                                    <Link2 size={12} style={{ color: "var(--accent-primary)" }} />
+                                                    /{upload.id}
+                                                </div>
+
+                                                {/* Folder & Tag Pills */}
+                                                {(upload.folder || (Array.isArray(upload.tags) && upload.tags.length > 0)) && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '4px 0 8px' }}>
+                                                        {upload.folder && (
+                                                            <span style={{
+                                                                background: 'rgba(139, 92, 246, 0.15)',
+                                                                border: '1px solid rgba(139, 92, 246, 0.25)',
+                                                                color: '#c4b5fd',
+                                                                fontSize: '0.68rem',
+                                                                padding: '2px 7px',
+                                                                borderRadius: '6px',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: '3px',
+                                                                fontWeight: 500,
+                                                            }}>
+                                                                <Folder size={10} /> {upload.folder}
+                                                            </span>
+                                                        )}
+                                                        {Array.isArray(upload.tags) && upload.tags.map((t: string) => (
+                                                            <span key={t} style={{
+                                                                background: 'rgba(255, 255, 255, 0.06)',
+                                                                border: '1px solid var(--border-color)',
+                                                                color: 'var(--text-muted)',
+                                                                fontSize: '0.68rem',
+                                                                padding: '2px 7px',
+                                                                borderRadius: '6px',
+                                                                fontWeight: 500,
+                                                            }}>
+                                                                #{t}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                <div style={styles.uploadMeta}>
+                                                    <span style={styles.uploadDate}>{new Date(upload.created_at).toLocaleDateString()}</span>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <span style={styles.uploadViews}>
+                                                            <Eye size={10} />
+                                                            {upload.views || 0}
+                                                        </span>
+                                                        <span style={{ ...styles.uploadViews, color: '#06b6d4' }}>
+                                                            <Download size={10} />
+                                                            {upload.downloads || 0}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Actions */}
+                                                <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); copyLink(upload.id); }}
+                                                        style={{
+                                                            flex: 1,
+                                                            padding: '8px',
+                                                            background: copiedId === upload.id ? 'rgba(16, 185, 129, 0.2)' : 'var(--input-bg)',
+                                                            border: `1px solid ${copiedId === upload.id ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-color)'}`,
+                                                            borderRadius: '8px',
+                                                            color: copiedId === upload.id ? '#10b981' : 'var(--text-muted)',
+                                                            fontSize: '0.75rem',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: '4px',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        {copiedId === upload.id ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleNativeShare(upload.id);
+                                                        }}
+                                                        title="Share Media"
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            background: 'rgba(139, 92, 246, 0.1)',
+                                                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                                                            borderRadius: '8px',
+                                                            color: 'var(--accent-primary)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Share2 size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setQrModal({ url: `${baseUrl}/i/${upload.id}`, title: `/${upload.id}` });
+                                                        }}
+                                                        title="Scan QR Code"
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            background: 'rgba(139, 92, 246, 0.1)',
+                                                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                                                            borderRadius: '8px',
+                                                            color: 'var(--accent-primary)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <QrCode size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEmbedModalItem({
+                                                                id: upload.id,
+                                                                isVideo: !!upload.type?.startsWith('video/'),
+                                                                title: upload.filename || upload.id
+                                                            });
+                                                        }}
+                                                        title="Embed Snippets (Markdown, HTML, BBCode)"
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            background: 'rgba(139, 92, 246, 0.1)',
+                                                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                                                            borderRadius: '8px',
+                                                            color: 'var(--accent-primary)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Code2 size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setOrganizingItem(upload);
+                                                            setFolderInput(upload.folder || '');
+                                                            setTagsInput(Array.isArray(upload.tags) ? upload.tags.join(', ') : '');
+                                                            setPasswordInput('');
+                                                            setShowModalPassword(false);
+                                                            setBurnViewModal(!!upload.burn_after_view);
+                                                            setBurnDownloadModal(!!upload.burn_after_download);
+                                                        }}
+                                                        title="Organize Folder & Tags"
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            background: 'rgba(139, 92, 246, 0.1)',
+                                                            border: '1px solid rgba(139, 92, 246, 0.2)',
+                                                            borderRadius: '8px',
+                                                            color: 'var(--accent-primary)',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <FolderPlus size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(upload.id); }}
+                                                        style={{
+                                                            padding: '8px 10px',
+                                                            background: 'rgba(239, 68, 68, 0.1)',
+                                                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                                                            borderRadius: '8px',
+                                                            color: '#f87171',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            fontFamily: 'inherit',
+                                                            transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Delete Confirm Overlay */}
+                                            {deleteConfirm === upload.id && (
+                                                <motion.div
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        inset: 0,
+                                                        background: 'rgba(0,0,0,0.9)',
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: '12px',
+                                                        borderRadius: '18px',
+                                                        padding: '1rem'
+                                                    }}
+                                                >
+                                                    <p style={{ color: '#fff', fontSize: '0.85rem', textAlign: 'center' }}>Delete this upload?</p>
+                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                background: 'var(--input-bg)',
+                                                                border: '1px solid var(--border-color)',
+                                                                borderRadius: '8px',
+                                                                color: '#fff',
+                                                                cursor: 'pointer',
+                                                                fontFamily: 'inherit'
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(upload.id); }}
+                                                            disabled={deleting}
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                background: '#ef4444',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                color: '#fff',
+                                                                cursor: 'pointer',
+                                                                fontFamily: 'inherit',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: '6px'
+                                                            }}
+                                                        >
+                                                            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </motion.div>
+                                    )})}
+                                </div>
+                            ) : (
+                                <div style={styles.emptyState}>
+                                    <div style={styles.emptyIcon}>
+                                        <ImageIcon size={36} />
+                                    </div>
+                                    <h3 style={styles.emptyTitle}>No uploads yet</h3>
+                                    <p style={styles.emptyText}>Upload your first file to get started</p>
+                                    <Link href="/">
+                                        <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} style={styles.uploadButton}>
+                                            <Upload size={18} />
+                                            Upload Now
+                                        </motion.button>
+                                    </Link>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* FOLDERS TAB */}
+                    {activeTab === "folders" && (
+                        <motion.div
+                            key="folders"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <div className="dashboard-section-header" style={{ ...styles.sectionHeader, justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div className="dashboard-section-icon" style={styles.sectionIcon}>
+                                        <Folder size={18} />
+                                    </div>
+                                    <h2 className="dashboard-section-title" style={styles.sectionTitle}>
+                                        My Folders ({allUserFolders.length})
+                                    </h2>
+                                </div>
+
+                                <motion.button
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => setShowCreateFolderModal(true)}
+                                    style={{
+                                        background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                        border: 'none',
+                                        color: '#fff',
+                                        padding: '8px 16px',
+                                        borderRadius: '12px',
+                                        fontSize: '0.85rem',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontFamily: 'inherit',
+                                    }}
+                                >
+                                    <FolderPlus size={16} />
+                                    + New Folder
+                                </motion.button>
+                            </div>
+
+                            {allUserFolders.length > 0 ? (
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+                                    gap: '1rem',
+                                    marginTop: '1.25rem'
+                                }}>
+                                    {allUserFolders.map((folderName) => {
+                                        const count = uploads.filter(u => u.folder === folderName).length;
+                                        return (
+                                            <motion.div
+                                                key={folderName}
+                                                whileHover={{ y: -3, borderColor: 'rgba(139, 92, 246, 0.4)' }}
+                                                style={{
+                                                    background: 'var(--panel-bg)',
+                                                    border: '1px solid var(--border-color)',
+                                                    borderRadius: '18px',
+                                                    padding: '1.25rem',
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    justifyContent: 'space-between',
+                                                    transition: 'all 0.2s',
+                                                }}
+                                            >
+                                                <div>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                                        <div style={{
+                                                            width: '40px',
+                                                            height: '40px',
+                                                            borderRadius: '12px',
+                                                            background: 'rgba(139, 92, 246, 0.15)',
+                                                            color: 'var(--accent-primary)',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center'
+                                                        }}>
+                                                            <Folder size={22} />
+                                                        </div>
+                                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleShareFolderAsAlbum(folderName);
+                                                                }}
+                                                                title={`Share "${folderName}" as Album`}
+                                                                style={{
+                                                                    background: 'transparent',
+                                                                    border: 'none',
+                                                                    color: '#8b5cf6',
+                                                                    padding: '7px 4px',
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                }}
+                                                            >
+                                                                <Share2 size={15} />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => handleDeleteFolder(folderName, e)}
+                                                                title={`Delete folder "${folderName}"`}
+                                                                style={{
+                                                                    background: 'transparent',
+                                                                    border: 'none',
+                                                                    color: 'var(--text-muted)',
+                                                                    cursor: 'pointer',
+                                                                    padding: '4px',
+                                                                }}
+                                                                onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
+                                                                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                                                            >
+                                                                <Trash2 size={15} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)', margin: '0 0 4px 0', wordBreak: 'break-word' }}>
+                                                        {folderName}
+                                                    </h3>
+                                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0 }}>
+                                                        {count} {count === 1 ? 'upload' : 'uploads'}
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedFolder(folderName);
+                                                        setActiveTab('uploads');
+                                                    }}
+                                                    style={{
+                                                        marginTop: '1.25rem',
+                                                        width: '100%',
+                                                        padding: '8px',
+                                                        background: 'rgba(139, 92, 246, 0.1)',
+                                                        border: '1px solid rgba(139, 92, 246, 0.2)',
+                                                        borderRadius: '10px',
+                                                        color: 'var(--accent-primary)',
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: 500,
+                                                        cursor: 'pointer',
+                                                        fontFamily: 'inherit',
+                                                    }}
+                                                >
+                                                    View Files →
+                                                </button>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div style={styles.emptyState}>
+                                    <div style={styles.emptyIcon}>
+                                        <FolderPlus size={36} />
+                                    </div>
+                                    <h3 style={styles.emptyTitle}>No folders created yet</h3>
+                                    <p style={styles.emptyText}>Organize your uploads into custom folders to keep everything neat</p>
+                                    <motion.button
+                                        whileHover={{ scale: 1.02 }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => setShowCreateFolderModal(true)}
+                                        style={styles.uploadButton}
+                                    >
+                                        <FolderPlus size={18} />
+                                        Create First Folder
+                                    </motion.button>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+
+                    {/* API KEYS TAB */}
+                    {activeTab === "api" && (
+                        <motion.div
+                            key="api"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <div className="dashboard-card" style={styles.card}>
+                                <div style={styles.cardTitle}>
+                                    <div className="dashboard-card-icon" style={styles.cardIcon}>
+                                        <Key size={22} />
+                                    </div>
+                                    <h2 className="dashboard-card-title" style={styles.cardTitleText}>API Key Management</h2>
+                                </div>
+
+                                <p className="dashboard-card-desc" style={styles.cardDescription}>
+                                    Use your API key to authenticate requests to the PixEdge REST API. Keep it secret and never share it
+                                    publicly.
+                                </p>
+
+                                {success && (
+                                    <div style={styles.successAlert}>
+                                        <CheckCircle size={18} />
+                                        {success}
+                                    </div>
+                                )}
+
+                                {apiKey ? (
+                                    <div className="dashboard-api-box" style={styles.apiKeyBox}>
+                                        <span className="dashboard-api-text" style={styles.apiKeyText}>{showKey ? apiKey : "••••••••••••••••••••••••••••••••"}</span>
+
+                                        <button className="dashboard-api-btn" style={styles.apiKeyButton} onClick={() => setShowKey(!showKey)} title={showKey ? "Hide" : "Show"}>
+                                            {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+
+                                        <button className="dashboard-api-btn" style={styles.apiKeyButton} onClick={() => copyToClipboard(apiKey)} title="Copy">
+                                            <Copy size={16} />
+                                        </button>
+
+                                        <button
+                                            className="dashboard-api-btn"
+                                            style={{ ...styles.apiKeyButton, background: "rgba(239, 68, 68, 0.1)", color: "#f87171" }}
+                                            onClick={generateApiKey}
+                                            disabled={generatingKey}
+                                            title="Rotate"
+                                        >
+                                            {generatingKey ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <motion.button
+                                        className="dashboard-btn-primary"
+                                        whileHover={{ scale: 1.01 }}
+                                        whileTap={{ scale: 0.99 }}
+                                        onClick={generateApiKey}
+                                        disabled={generatingKey}
+                                        style={styles.primaryButton}
+                                    >
+                                        {generatingKey ? <Loader2 size={18} className="animate-spin" /> : <Key size={18} />}
+                                        Generate API Key
+                                    </motion.button>
+                                )}
+                            </div>
+
+                            {/* ShareX Desktop Integration Card */}
+                            <div style={styles.card}>
+                                <div style={styles.cardTitle}>
+                                    <div style={{ ...styles.cardIcon, background: "rgba(6, 182, 212, 0.15)", color: "#06b6d4" }}>
+                                        <Download size={22} />
+                                    </div>
+                                    <h2 style={styles.cardTitleText}>ShareX Desktop Integration</h2>
+                                </div>
+                                <p style={styles.cardDescription}>
+                                    Take screenshots on Windows and automatically upload them to PixEdge in 1-click. Download the pre-configured ShareX destination file (.sxcu) for your account.
+                                </p>
+                                {apiKey ? (
+                                    <a
+                                        href={`/api/sharex?key=${encodeURIComponent(apiKey)}`}
+                                        download="PixEdge.sxcu"
+                                        style={{ textDecoration: 'none' }}
+                                    >
+                                        <motion.button
+                                            whileHover={{ scale: 1.01 }}
+                                            whileTap={{ scale: 0.99 }}
+                                            style={{
+                                                ...styles.primaryButton,
+                                                background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+                                                color: '#ffffff',
+                                                fontWeight: 700,
+                                                fontSize: '0.92rem',
+                                                border: 'none',
+                                                boxShadow: '0 8px 22px rgba(6, 182, 212, 0.35)',
+                                            }}
+                                        >
+                                            <Download size={18} color="#ffffff" />
+                                            Download ShareX Config (.sxcu)
+                                        </motion.button>
+                                    </a>
+                                ) : (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', background: 'rgba(255, 255, 255, 0.04)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                        🔑 Generate an API Key above to unlock 1-click ShareX config download.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div style={styles.card}>
+                                <div style={styles.cardTitle}>
+                                    <div style={styles.cardIcon}>
+                                        <ExternalLink size={22} />
+                                    </div>
+                                    <h2 style={styles.cardTitleText}>Quick Links</h2>
+                                </div>
+                                <Link href="/docs" style={{ textDecoration: 'none' }}>
+                                    <motion.button
+                                        whileHover={{ scale: 1.01 }}
+                                        whileTap={{ scale: 0.99 }}
+                                        style={{
+                                            ...styles.primaryButton,
+                                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                            color: '#ffffff',
+                                            fontWeight: 700,
+                                            fontSize: '0.92rem',
+                                            border: 'none',
+                                            boxShadow: '0 8px 22px rgba(139, 92, 246, 0.35)',
+                                        }}
+                                    >
+                                        <Sparkles size={18} color="#ffffff" />
+                                        View API Documentation
+                                    </motion.button>
+                                </Link>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* SETTINGS TAB */}
+                    {activeTab === "settings" && (
+                        <motion.div
+                            key="settings"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                        >
+                            <div className="dashboard-card" style={styles.card}>
+                                <div style={styles.cardTitle}>
+                                    <div className="dashboard-card-icon" style={styles.cardIcon}>
+                                        <User size={22} />
+                                    </div>
+                                    <h2 className="dashboard-card-title" style={styles.cardTitleText}>Profile Settings</h2>
+                                </div>
+
+                                {success && (
+                                    <div style={styles.successAlert}>
+                                        <CheckCircle size={18} />
+                                        {success}
+                                    </div>
+                                )}
+
+                                <div style={styles.inputGroup}>
+                                    <label style={styles.inputLabel}>Display Name</label>
+                                    <div style={styles.inputWrapper}>
+                                        <User size={18} style={styles.inputIcon} />
+                                        <input
+                                            className="dashboard-input"
+                                            type="text"
+                                            value={name}
+                                            onChange={(e) => setName(e.target.value)}
+                                            placeholder="Your display name"
+                                            style={styles.input}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ ...styles.inputGroup, marginBottom: "1.5rem" }}>
+                                    <label style={styles.inputLabel}>Email Address</label>
+                                    <div style={styles.inputWrapper}>
+                                        <Mail size={18} style={styles.inputIcon} />
+                                        <input className="dashboard-input" type="email" value={user?.email || ""} disabled style={{ ...styles.input, opacity: 0.6 }} />
+                                    </div>
+                                </div>
+
+                                {/* Profile Picture Settings */}
+                                <div style={{ ...styles.inputGroup, marginBottom: "1.5rem" }}>
+                                    <label style={styles.inputLabel}>Profile Picture (PFP)</label>
+                                    <div style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+                                        <img
+                                            src={avatarInput || avatarUrl}
+                                            alt="PFP Preview"
+                                            style={{
+                                                width: "56px",
+                                                height: "56px",
+                                                borderRadius: "50%",
+                                                border: "2px solid var(--accent-primary)",
+                                                objectFit: "cover",
+                                            }}
+                                        />
+                                        <div style={{ flex: 1, minWidth: "220px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                                            <div style={styles.inputWrapper}>
+                                                <ImageIcon size={18} style={styles.inputIcon} />
+                                                <input
+                                                    className="dashboard-input"
+                                                    type="url"
+                                                    value={avatarInput}
+                                                    onChange={(e) => setAvatarInput(e.target.value)}
+                                                    placeholder="Paste Image URL or Upload below"
+                                                    style={styles.input}
+                                                />
+                                            </div>
+                                            <label
+                                                style={{
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: "6px",
+                                                    fontSize: "0.8rem",
+                                                    fontWeight: 600,
+                                                    color: "var(--accent-primary)",
+                                                    cursor: "pointer",
+                                                    width: "fit-content",
+                                                }}
+                                            >
+                                                {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                                                Upload Avatar File...
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleAvatarFileUpload}
+                                                    style={{ display: "none" }}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <motion.button
+                                    className="dashboard-btn-primary"
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                    onClick={handleSaveProfile}
+                                    disabled={saving}
+                                    style={styles.primaryButton}
+                                >
+                                    {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                    Save Changes
+                                </motion.button>
+                            </div>
+
+                            <div className="dashboard-card" style={styles.card}>
+                                <div style={styles.cardTitle}>
+                                    <div className="dashboard-card-icon" style={styles.cardIcon}>
+                                        <Shield size={22} />
+                                    </div>
+                                    <h2 className="dashboard-card-title" style={styles.cardTitleText}>Security</h2>
+                                </div>
+
+                                <p className="dashboard-card-desc" style={styles.cardDescription}>
+                                    Your account is secured with {user?.email?.includes("@telegram") ? "Telegram" : "OAuth"}{" "}
+                                    authentication. All uploads are encrypted and served via our global edge network.
+                                </p>
+
+                                <div className="dashboard-danger-zone" style={styles.dangerZone}>
+                                    <div style={styles.dangerTitle}>Danger Zone</div>
+                                    <p style={styles.dangerText}>
+                                        Once you delete your account, there is no going back. Please be certain.
+                                    </p>
+                                    <motion.button
+                                        whileHover={{ background: "rgba(239, 68, 68, 0.1)" }}
+                                        whileTap={{ scale: 0.98 }}
+                                        onClick={() => alert("Account deletion is not implemented yet.")}
+                                        style={styles.dangerButton}
+                                    >
+                                        Delete Account
+                                    </motion.button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Organize Modal Popover */}
+                <AnimatePresence>
+                    {organizingItem && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.75)',
+                                backdropFilter: 'blur(10px)',
+                                WebkitBackdropFilter: 'blur(10px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 999,
+                                padding: '1rem',
+                            }}
+                            onClick={() => setOrganizingItem(null)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '24px',
+                                    padding: '1.75rem',
+                                    width: '100%',
+                                    maxWidth: '440px',
+                                    boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                                        <FolderPlus size={18} style={{ color: 'var(--accent-primary)' }} />
+                                        Organize File (/{organizingItem.id})
+                                    </h3>
+                                    <button
+                                        onClick={() => setOrganizingItem(null)}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                {/* Folder Name Field */}
+                                <div style={{ marginBottom: '1.25rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Folder Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Work, Screenshots, Vacation"
+                                        value={folderInput}
+                                        onChange={(e) => setFolderInput(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '10px 14px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                    {allUserFolders.length > 0 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '8px' }}>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', alignSelf: 'center', marginRight: '2px' }}>Pick existing:</span>
+                                            {allUserFolders.map(f => (
+                                                <button
+                                                    key={f}
+                                                    type="button"
+                                                    onClick={() => setFolderInput(f)}
+                                                    style={{
+                                                        background: folderInput === f ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.06)',
+                                                        border: `1px solid ${folderInput === f ? 'rgba(139, 92, 246, 0.4)' : 'var(--border-color)'}`,
+                                                        color: folderInput === f ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                                        fontSize: '0.72rem',
+                                                        padding: '3px 9px',
+                                                        borderRadius: '8px',
+                                                        cursor: 'pointer',
+                                                        fontFamily: 'inherit',
+                                                    }}
+                                                >
+                                                    {f}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Tags Field */}
+                                <div style={{ marginBottom: '1.75rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Tags (comma-separated)
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. wallpaper, design, urgent"
+                                        value={tagsInput}
+                                        onChange={(e) => setTagsInput(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '10px 14px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Password Protection Field */}
+                                <div style={{ marginBottom: '1.75rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Secret PIN / Password Protection
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <Lock size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                                        <input
+                                            type={showModalPassword ? "text" : "password"}
+                                            placeholder={organizingItem?.password_hash ? "Protected (Type new PIN to update)" : "Add secret PIN or password"}
+                                            value={passwordInput}
+                                            onChange={(e) => setPasswordInput(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                background: 'var(--input-bg)',
+                                                border: '1px solid var(--border-color)',
+                                                borderRadius: '14px',
+                                                padding: '10px 42px 10px 38px',
+                                                color: 'var(--text-main)',
+                                                fontSize: '0.85rem',
+                                                outline: 'none',
+                                                fontFamily: 'inherit',
+                                            }}
+                                        />
+                                        {passwordInput && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowModalPassword(!showModalPassword)}
+                                                style={{
+                                                    position: "absolute",
+                                                    right: "10px",
+                                                    top: "50%",
+                                                    transform: "translateY(-50%)",
+                                                    background: "rgba(139, 92, 246, 0.25)",
+                                                    border: "1px solid rgba(139, 92, 246, 0.5)",
+                                                    borderRadius: "8px",
+                                                    padding: "5px",
+                                                    color: "#ffffff",
+                                                    cursor: "pointer",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    transition: "all 0.2s",
+                                                    boxShadow: "0 2px 8px rgba(139, 92, 246, 0.3)",
+                                                }}
+                                                title={showModalPassword ? "Hide PIN" : "Show PIN"}
+                                            >
+                                                {showModalPassword ? <EyeOff size={14} color="#ffffff" /> : <Eye size={14} color="#ffffff" />}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Self-Destruct Options */}
+                                <div style={{ marginBottom: "1.5rem" }}>
+                                    <label style={{ display: "block", fontSize: "0.825rem", color: "var(--text-muted)", marginBottom: "6px", fontWeight: 600 }}>
+                                        🔥 Burn After Reading (Self-Destruct)
+                                    </label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setBurnViewModal(prev => !prev)}
+                                            style={{
+                                                padding: '10px 12px',
+                                                borderRadius: '12px',
+                                                border: burnViewModal ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                                                background: burnViewModal ? 'rgba(239, 68, 68, 0.15)' : 'var(--input-bg)',
+                                                color: burnViewModal ? '#f87171' : 'var(--text-muted)',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                fontFamily: 'inherit',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <Flame size={14} color={burnViewModal ? '#f87171' : 'currentColor'} />
+                                            Burn 1st View
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => setBurnDownloadModal(prev => !prev)}
+                                            style={{
+                                                padding: '10px 12px',
+                                                borderRadius: '12px',
+                                                border: burnDownloadModal ? '1px solid #ef4444' : '1px solid var(--border-color)',
+                                                background: burnDownloadModal ? 'rgba(239, 68, 68, 0.15)' : 'var(--input-bg)',
+                                                color: burnDownloadModal ? '#f87171' : 'var(--text-muted)',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                fontFamily: 'inherit',
+                                                transition: 'all 0.2s',
+                                            }}
+                                        >
+                                            <Flame size={14} color={burnDownloadModal ? '#f87171' : 'currentColor'} />
+                                            Burn Download
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => setOrganizingItem(null)}
+                                        style={{
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-muted)',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSaveOrganization}
+                                        disabled={savingOrg}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                            border: 'none',
+                                            color: '#fff',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        {savingOrg ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save Changes
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Embed Snippets Modal */}
+                <AnimatePresence>
+                    {embedModalItem && (() => {
+                        const ext = embedModalItem.isVideo ? '.mp4' : '.jpg';
+                        const pageUrl = `${baseUrl}/i/${embedModalItem.id}`;
+                        const directUrl = `${baseUrl}/i/${embedModalItem.id}${ext}`;
+                        const markdownSnippet = embedModalItem.isVideo
+                            ? `[![PixEdge Video](${baseUrl}/i/${embedModalItem.id}.jpg)](${pageUrl})`
+                            : `![PixEdge Media](${directUrl})`;
+                        const htmlSnippet = embedModalItem.isVideo
+                            ? `<video src="${directUrl}" controls playsinline poster="${baseUrl}/i/${embedModalItem.id}.jpg" style="max-width: 100%; border-radius: 12px;"></video>`
+                            : `<img src="${directUrl}" alt="PixEdge Media" style="max-width: 100%; border-radius: 12px;" />`;
+                        const bbCodeSnippet = embedModalItem.isVideo
+                            ? `[url=${pageUrl}][img]${baseUrl}/i/${embedModalItem.id}.jpg[/img][/url]`
+                            : `[img]${directUrl}[/img]`;
+
+                        const snippets = [
+                            { label: 'Direct Media Link', key: 'direct', value: directUrl },
+                            { label: 'Markdown (Reddit / GitHub)', key: 'md', value: markdownSnippet },
+                            { label: 'HTML Embed Code', key: 'html', value: htmlSnippet },
+                            { label: 'BBCode (Forums)', key: 'bb', value: bbCodeSnippet },
+                        ];
+
+                        return (
+                            <div
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    background: 'rgba(0, 0, 0, 0.75)',
+                                    backdropFilter: 'blur(10px)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 1000,
+                                    padding: '20px',
+                                }}
+                                onClick={() => { setEmbedModalItem(null); setCopiedSnippet(null); }}
+                            >
+                                <motion.div
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    style={{
+                                        background: 'var(--panel-bg)',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: '24px',
+                                        padding: '24px',
+                                        width: '100%',
+                                        maxWidth: '480px',
+                                        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(139, 92, 246, 0.15)',
+                                        position: 'relative',
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '1rem' }}>
+                                            <Code2 size={20} />
+                                            <span>Embed Snippets</span>
+                                        </div>
+                                        <button
+                                            onClick={() => { setEmbedModalItem(null); setCopiedSnippet(null); }}
+                                            style={{
+                                                background: 'transparent',
+                                                border: 'none',
+                                                color: 'var(--text-muted)',
+                                                cursor: 'pointer',
+                                                padding: '4px',
+                                            }}
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+                                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 16px 0' }}>
+                                        Copy ready-to-paste snippets for Reddit, GitHub, forums, or websites:
+                                    </p>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+                                        {snippets.map((s) => (
+                                            <div key={s.key} style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                                                    <span>{s.label}</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(s.value);
+                                                            setCopiedSnippet(s.key);
+                                                            setTimeout(() => setCopiedSnippet(null), 2000);
+                                                        }}
+                                                        style={{
+                                                            background: copiedSnippet === s.key ? 'rgba(16, 185, 129, 0.2)' : 'rgba(139, 92, 246, 0.15)',
+                                                            border: `1px solid ${copiedSnippet === s.key ? '#10b981' : 'rgba(139, 92, 246, 0.3)'}`,
+                                                            color: copiedSnippet === s.key ? '#10b981' : '#c4b5fd',
+                                                            borderRadius: '6px',
+                                                            padding: '2px 8px',
+                                                            fontSize: '0.72rem',
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {copiedSnippet === s.key ? 'Copied!' : 'Copy'}
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    readOnly
+                                                    value={s.value}
+                                                    onClick={(e) => (e.target as HTMLInputElement).select()}
+                                                    style={{
+                                                        width: '100%',
+                                                        background: 'var(--input-bg)',
+                                                        border: '1px solid var(--border-color)',
+                                                        borderRadius: '8px',
+                                                        padding: '8px 10px',
+                                                        color: 'var(--text-main)',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.78rem',
+                                                        outline: 'none',
+                                                        boxSizing: 'border-box',
+                                                    }}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={() => { setEmbedModalItem(null); setCopiedSnippet(null); }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '12px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Done
+                                    </button>
+                                </motion.div>
+                            </div>
+                        );
+                    })()}
+                </AnimatePresence>
+
+                {/* Create Folder Modal */}
+                <AnimatePresence>
+                    {showCreateFolderModal && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.75)',
+                                backdropFilter: 'blur(10px)',
+                                WebkitBackdropFilter: 'blur(10px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 999,
+                                padding: '1rem',
+                            }}
+                            onClick={() => setShowCreateFolderModal(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '24px',
+                                    padding: '1.75rem',
+                                    width: '100%',
+                                    maxWidth: '400px',
+                                    boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                    <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
+                                        <FolderPlus size={18} style={{ color: 'var(--accent-primary)' }} />
+                                        Create New Folder
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowCreateFolderModal(false)}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Folder Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Work, Wallpapers, Personal"
+                                        value={newFolderName}
+                                        onChange={(e) => setNewFolderName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); }}
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '10px 14px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => setShowCreateFolderModal(false)}
+                                        style={{
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-muted)',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleCreateFolder}
+                                        disabled={creatingFolder || !newFolderName.trim()}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                            border: 'none',
+                                            color: '#fff',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                            opacity: (!newFolderName.trim() || creatingFolder) ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {creatingFolder ? <Loader2 size={15} className="animate-spin" /> : <FolderPlus size={15} />} Create Folder
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* QR Code Sharing Modal */}
+                <AnimatePresence>
+                    {qrModal && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.8)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1050,
+                                padding: '1rem',
+                            }}
+                            onClick={() => { setQrModal(null); setCopiedQr(false); }}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.92, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '28px',
+                                    padding: '2rem',
+                                    width: '100%',
+                                    maxWidth: '380px',
+                                    textAlign: 'center',
+                                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(139, 92, 246, 0.15)',
+                                    position: 'relative',
+                                }}
+                            >
+                                <button
+                                    onClick={() => { setQrModal(null); setCopiedQr(false); }}
+                                    style={{
+                                        position: 'absolute',
+                                        top: '16px',
+                                        right: '16px',
+                                        background: 'rgba(255, 255, 255, 0.08)',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '50%',
+                                        width: '32px',
+                                        height: '32px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'var(--text-muted)',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s',
+                                    }}
+                                >
+                                    <X size={16} />
+                                </button>
+
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginBottom: '1.25rem', color: 'var(--accent-primary)', fontWeight: 700, fontSize: '0.95rem' }}>
+                                    <QrCode size={18} />
+                                    <span>Instant Mobile Scan</span>
+                                </div>
+
+                                <div
+                                    style={{
+                                        background: '#ffffff',
+                                        padding: '16px',
+                                        borderRadius: '20px',
+                                        display: 'inline-block',
+                                        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.3)',
+                                        marginBottom: '1.25rem',
+                                    }}
+                                >
+                                    <QRCodeSVG value={qrModal.url} size={180} />
+                                </div>
+
+                                <div style={{ marginBottom: '1.25rem' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px', wordBreak: 'break-all' }}>
+                                        {qrModal.title}
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+                                        {qrModal.url}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(qrModal.url);
+                                            setCopiedQr(true);
+                                            setTimeout(() => setCopiedQr(false), 2000);
+                                        }}
+                                        style={{
+                                            flex: 1,
+                                            background: copiedQr ? 'rgba(16, 185, 129, 0.15)' : 'var(--input-bg)',
+                                            border: `1px solid ${copiedQr ? '#10b981' : 'var(--border-color)'}`,
+                                            color: copiedQr ? '#10b981' : 'var(--text-main)',
+                                            padding: '10px 16px',
+                                            borderRadius: '14px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            transition: 'all 0.2s',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        {copiedQr ? <><Check size={15} /> Copied</> : <><Copy size={15} /> Copy Link</>}
+                                    </button>
+                                    <a
+                                        href={qrModal.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{
+                                            padding: '10px 16px',
+                                            borderRadius: '14px',
+                                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                            color: '#fff',
+                                            textDecoration: 'none',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        <ExternalLink size={15} /> Open
+                                    </a>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Floating Batch Action Bar */}
+                <AnimatePresence>
+                    {selectedIds.length > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            style={{
+                                position: "fixed",
+                                bottom: "28px",
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                background: "rgba(18, 18, 24, 0.92)",
+                                backdropFilter: "blur(20px)",
+                                WebkitBackdropFilter: "blur(20px)",
+                                border: "1px solid rgba(139, 92, 246, 0.35)",
+                                boxShadow: "0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.2)",
+                                borderRadius: "100px",
+                                padding: "8px 14px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                zIndex: 900,
+                                maxWidth: "95vw",
+                                flexWrap: "nowrap",
+                                overflowX: "auto",
+                            }}
+                        >
+                            {/* Badge Count */}
+                            <div
+                                style={{
+                                    background: "rgba(139, 92, 246, 0.2)",
+                                    border: "1px solid rgba(139, 92, 246, 0.4)",
+                                    color: "#c4b5fd",
+                                    padding: "4px 12px",
+                                    borderRadius: "50px",
+                                    fontSize: "0.82rem",
+                                    fontWeight: 700,
+                                    whiteSpace: "nowrap",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                }}
+                            >
+                                <CheckSquare size={14} />
+                                <span>{selectedIds.length} Selected</span>
+                            </div>
+
+                            <div style={{ width: "1px", height: "20px", background: "rgba(255, 255, 255, 0.15)", margin: "0 2px" }} />
+
+                            {/* Action: Move to Folder */}
+                            <button
+                                onClick={() => setShowBatchFolderModal(true)}
+                                disabled={!!batchActionLoading}
+                                style={{
+                                    background: "rgba(255, 255, 255, 0.08)",
+                                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                                    color: "#ffffff",
+                                    padding: "6px 14px",
+                                    borderRadius: "50px",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    whiteSpace: "nowrap",
+                                    fontFamily: "inherit",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                <Folder size={13} color="#8b5cf6" /> Move Folder
+                            </button>
+
+                            {/* Action: Tag */}
+                            <button
+                                onClick={() => setShowBatchTagsModal(true)}
+                                disabled={!!batchActionLoading}
+                                style={{
+                                    background: "rgba(255, 255, 255, 0.08)",
+                                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                                    color: "#ffffff",
+                                    padding: "6px 14px",
+                                    borderRadius: "50px",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    whiteSpace: "nowrap",
+                                    fontFamily: "inherit",
+                                    transition: "all 0.2s",
+                                }}
+                            >
+                                <Tag size={13} color="#06b6d4" /> Add Tags
+                            </button>
+
+                            {/* Action: Download ZIP */}
+                            <button
+                                onClick={handleBatchDownloadZip}
+                                disabled={!!batchActionLoading}
+                                style={{
+                                    background: "linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)",
+                                    border: "none",
+                                    color: "#ffffff",
+                                    padding: "6px 14px",
+                                    borderRadius: "50px",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    whiteSpace: "nowrap",
+                                    fontFamily: "inherit",
+                                    boxShadow: "0 4px 15px rgba(139, 92, 246, 0.3)",
+                                }}
+                            >
+                                {batchZipProgress ? (
+                                    <><Loader2 size={13} className="animate-spin" /> {batchZipProgress}</>
+                                ) : (
+                                    <><FileArchive size={13} /> Download ZIP</>
+                                )}
+                            </button>
+
+                            {/* Action: Batch Delete */}
+                            <button
+                                onClick={() => setShowBatchDeleteModal(true)}
+                                disabled={!!batchActionLoading}
+                                style={{
+                                    background: "rgba(239, 68, 68, 0.15)",
+                                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                                    color: "#f87171",
+                                    padding: "6px 14px",
+                                    borderRadius: "50px",
+                                    fontSize: "0.8rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    whiteSpace: "nowrap",
+                                    fontFamily: "inherit",
+                                }}
+                            >
+                                <Trash2 size={13} /> Delete
+                            </button>
+
+                            {/* Clear Selection */}
+                            <button
+                                onClick={handleClearSelection}
+                                title="Deselect All"
+                                style={{
+                                    background: "rgba(255, 255, 255, 0.08)",
+                                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                                    color: "#a1a1aa",
+                                    width: "28px",
+                                    height: "28px",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    marginLeft: "2px",
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Batch Move to Folder Modal */}
+                <AnimatePresence>
+                    {showBatchFolderModal && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.8)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1050,
+                                padding: '1rem',
+                            }}
+                            onClick={() => setShowBatchFolderModal(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.92, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '24px',
+                                    padding: '2rem',
+                                    width: '100%',
+                                    maxWidth: '420px',
+                                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(139, 92, 246, 0.15)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+                                    <div style={{ background: 'rgba(139, 92, 246, 0.15)', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '8px', borderRadius: '12px', display: 'flex', color: 'var(--accent-primary)' }}>
+                                        <Folder size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>Move {selectedIds.length} Items</h3>
+                                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>Select an existing folder or type a new one</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '1.25rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Folder Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Work, Wallpapers, Wallpapers/Nature"
+                                        value={batchTargetFolder}
+                                        onChange={(e) => setBatchTargetFolder(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleBatchMoveFolder(); }}
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '10px 14px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                            marginBottom: '10px',
+                                        }}
+                                    />
+
+                                    {/* Quick Select Existing Folders */}
+                                    {allUserFolders.length > 0 && (
+                                        <div>
+                                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Or choose existing:</span>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '100px', overflowY: 'auto' }}>
+                                                <button
+                                                    onClick={() => setBatchTargetFolder('')}
+                                                    style={{
+                                                        background: batchTargetFolder === '' ? 'rgba(139, 92, 246, 0.2)' : 'var(--input-bg)',
+                                                        border: `1px solid ${batchTargetFolder === '' ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                                                        color: batchTargetFolder === '' ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                                        padding: '4px 10px',
+                                                        borderRadius: '8px',
+                                                        fontSize: '0.75rem',
+                                                        cursor: 'pointer',
+                                                        fontFamily: 'inherit',
+                                                    }}
+                                                >
+                                                    / (Root - No Folder)
+                                                </button>
+                                                {allUserFolders.map(f => (
+                                                    <button
+                                                        key={f}
+                                                        onClick={() => setBatchTargetFolder(f)}
+                                                        style={{
+                                                            background: batchTargetFolder === f ? 'rgba(139, 92, 246, 0.2)' : 'var(--input-bg)',
+                                                            border: `1px solid ${batchTargetFolder === f ? 'var(--accent-primary)' : 'var(--border-color)'}`,
+                                                            color: batchTargetFolder === f ? 'var(--accent-primary)' : 'var(--text-muted)',
+                                                            padding: '4px 10px',
+                                                            borderRadius: '8px',
+                                                            fontSize: '0.75rem',
+                                                            cursor: 'pointer',
+                                                            fontFamily: 'inherit',
+                                                        }}
+                                                    >
+                                                        📁 {f}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => setShowBatchFolderModal(false)}
+                                        style={{
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-muted)',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBatchMoveFolder}
+                                        disabled={batchActionLoading === 'folder'}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                                            border: 'none',
+                                            color: '#fff',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        {batchActionLoading === 'folder' ? <Loader2 size={15} className="animate-spin" /> : <Folder size={15} />} Apply Move
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Batch Add Tags Modal */}
+                <AnimatePresence>
+                    {showBatchTagsModal && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.8)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1050,
+                                padding: '1rem',
+                            }}
+                            onClick={() => setShowBatchTagsModal(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.92, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '24px',
+                                    padding: '2rem',
+                                    width: '100%',
+                                    maxWidth: '420px',
+                                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(139, 92, 246, 0.15)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.25rem' }}>
+                                    <div style={{ background: 'rgba(6, 182, 212, 0.15)', border: '1px solid rgba(6, 182, 212, 0.3)', padding: '8px', borderRadius: '12px', display: 'flex', color: '#06b6d4' }}>
+                                        <Tag size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>Add Tags ({selectedIds.length} Items)</h3>
+                                        <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>Comma-separated tags to attach to selected items</p>
+                                    </div>
+                                </div>
+
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 500, display: 'block', marginBottom: '6px' }}>
+                                        Tags
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. wallpaper, 4k, cyberpunk, landscape"
+                                        value={batchTagsInput}
+                                        onChange={(e) => setBatchTagsInput(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleBatchAddTags(); }}
+                                        autoFocus
+                                        style={{
+                                            width: '100%',
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            borderRadius: '14px',
+                                            padding: '10px 14px',
+                                            color: 'var(--text-main)',
+                                            fontSize: '0.85rem',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                                    <button
+                                        onClick={() => setShowBatchTagsModal(false)}
+                                        style={{
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-muted)',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBatchAddTags}
+                                        disabled={batchActionLoading === 'tags' || !batchTagsInput.trim()}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+                                            border: 'none',
+                                            color: '#fff',
+                                            padding: '9px 18px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                            opacity: (!batchTagsInput.trim() || batchActionLoading === 'tags') ? 0.6 : 1,
+                                        }}
+                                    >
+                                        {batchActionLoading === 'tags' ? <Loader2 size={15} className="animate-spin" /> : <Tag size={15} />} Add Tags
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Batch Delete Confirmation Modal */}
+                <AnimatePresence>
+                    {showBatchDeleteModal && (
+                        <div
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(0,0,0,0.8)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1050,
+                                padding: '1rem',
+                            }}
+                            onClick={() => setShowBatchDeleteModal(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.92, y: 15 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 15 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    background: 'var(--panel-bg)',
+                                    backdropFilter: 'blur(24px)',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    borderRadius: '24px',
+                                    padding: '2rem',
+                                    width: '100%',
+                                    maxWidth: '400px',
+                                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(239, 68, 68, 0.15)',
+                                    textAlign: 'center',
+                                }}
+                            >
+                                <div style={{ width: '56px', height: '56px', borderRadius: '18px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem' }}>
+                                    <Trash2 size={26} />
+                                </div>
+
+                                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 8px', color: '#fff' }}>Delete {selectedIds.length} Uploads?</h3>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1.75rem', lineHeight: 1.5 }}>
+                                    This action will permanently delete all {selectedIds.length} selected files from your cloud storage. This cannot be undone.
+                                </p>
+
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    <button
+                                        onClick={() => setShowBatchDeleteModal(false)}
+                                        style={{
+                                            flex: 1,
+                                            background: 'var(--input-bg)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-muted)',
+                                            padding: '10px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            cursor: 'pointer',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleBatchDelete}
+                                        disabled={batchActionLoading === 'delete'}
+                                        style={{
+                                            flex: 1,
+                                            background: '#ef4444',
+                                            border: 'none',
+                                            color: '#fff',
+                                            padding: '10px',
+                                            borderRadius: '12px',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    >
+                                        {batchActionLoading === 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />} Confirm Delete
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Floating Paste Upload Toast */}
+                <AnimatePresence>
+                    {pasteToast && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                            transition={{ duration: 0.2 }}
+                            style={{
+                                position: 'fixed',
+                                bottom: '32px',
+                                right: '32px',
+                                background: 'rgba(18, 18, 24, 0.95)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                border: `1px solid ${pasteToast.type === 'error' ? 'rgba(239, 68, 68, 0.5)' : pasteToast.type === 'success' ? 'rgba(16, 185, 129, 0.5)' : 'rgba(139, 92, 246, 0.5)'}`,
+                                borderRadius: '16px',
+                                padding: '14px 20px',
+                                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(139, 92, 246, 0.2)',
+                                zIndex: 1100,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                maxWidth: '420px',
+                            }}
+                        >
+                            {pastingUpload ? (
+                                <Loader2 size={18} className="animate-spin" style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+                            ) : pasteToast.type === 'success' ? (
+                                <CheckCircle size={18} style={{ color: '#10b981', flexShrink: 0 }} />
+                            ) : pasteToast.type === 'error' ? (
+                                <AlertCircle size={18} style={{ color: '#ef4444', flexShrink: 0 }} />
+                            ) : (
+                                <Sparkles size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+                            )}
+                            <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff' }}>
+                                    {pasteToast.message}
+                                </div>
+                                {pastingUpload && (
+                                    <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '6px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${pasteUploadProgress}%`, height: '100%', background: 'linear-gradient(90deg, #8b5cf6, #06b6d4)', transition: 'width 0.2s ease' }} />
+                                    </div>
+                                )}
+                            </div>
+                            {pasteToast.url && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(pasteToast.url!);
+                                            setCopiedId(pasteToast.id || 'paste');
+                                            setTimeout(() => setCopiedId(null), 2000);
+                                        }}
+                                        style={{
+                                            padding: '5px 10px',
+                                            background: 'rgba(139, 92, 246, 0.2)',
+                                            border: '1px solid rgba(139, 92, 246, 0.4)',
+                                            borderRadius: '8px',
+                                            color: '#c4b5fd',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                        }}
+                                    >
+                                        <Copy size={12} /> {copiedId === (pasteToast.id || 'paste') ? 'Copied' : 'Copy'}
+                                    </button>
+                                    <a
+                                        href={pasteToast.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{
+                                            padding: '5px 8px',
+                                            background: 'rgba(255, 255, 255, 0.1)',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '8px',
+                                            color: '#fff',
+                                            fontSize: '0.75rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <ExternalLink size={12} />
+                                    </a>
+                                </div>
+                            )}
+                            <button
+                                onClick={() => setPasteToast(null)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#a1a1aa',
+                                    cursor: 'pointer',
+                                    padding: '2px',
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Quick-Preview Lightbox Modal (Spacebar / Click) */}
+                <AnimatePresence>
+                    {lightboxItem && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(9, 9, 11, 0.92)',
+                                backdropFilter: 'blur(24px)',
+                                WebkitBackdropFilter: 'blur(24px)',
+                                zIndex: 1000,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '1.25rem',
+                                userSelect: 'none',
+                            }}
+                        >
+                            {/* Lightbox Top Header */}
+                            <div style={{ width: '100%', maxWidth: '1200px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ background: 'rgba(139, 92, 246, 0.2)', color: '#c4b5fd', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700 }}>
+                                        {lightboxIndex + 1} / {filteredUploads.length}
+                                    </span>
+                                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#f4f4f5', margin: 0 }}>
+                                        /{lightboxItem.id}
+                                    </h3>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '0.72rem', background: 'rgba(255, 255, 255, 0.08)', padding: '4px 10px', borderRadius: '6px', color: '#a1a1aa' }}>
+                                        Space / ← → / Esc
+                                    </span>
+                                    <button
+                                        onClick={() => setLightboxItem(null)}
+                                        style={{ background: 'rgba(255, 255, 255, 0.1)', border: 'none', borderRadius: '50%', width: '36px', height: '36px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                    >
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Lightbox Center Content + Navigation Arrows */}
+                            <div style={{ position: 'relative', width: '100%', maxWidth: '1200px', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0.75rem 0' }}>
+                                {/* Left Arrow */}
+                                {filteredUploads.length > 1 && (
+                                    <button
+                                        onClick={() => {
+                                            const newIdx = lightboxIndex > 0 ? lightboxIndex - 1 : filteredUploads.length - 1;
+                                            setLightboxIndex(newIdx);
+                                            setLightboxItem(filteredUploads[newIdx]);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            left: '10px',
+                                            background: 'rgba(18, 18, 22, 0.85)',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '50%',
+                                            width: '44px',
+                                            height: '44px',
+                                            color: '#fff',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            zIndex: 20,
+                                            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                                        }}
+                                    >
+                                        <ChevronLeft size={22} />
+                                    </button>
+                                )}
+
+                                {/* Media Box */}
+                                <div style={{ maxHeight: '68vh', maxWidth: '85vw', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '18px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.15)', boxShadow: '0 25px 60px rgba(0,0,0,0.75)', background: '#000' }}>
+                                    {lightboxItem.metadata?.type?.startsWith('video/') ? (
+                                        <video src={`/i/${lightboxItem.id}.mp4`} controls autoPlay style={{ maxHeight: '68vh', maxWidth: '85vw', objectFit: 'contain' }} />
+                                    ) : (
+                                        <img src={`/i/${lightboxItem.id}.jpg`} alt={lightboxItem.id} style={{ maxHeight: '68vh', maxWidth: '85vw', objectFit: 'contain' }} />
+                                    )}
+                                </div>
+
+                                {/* Right Arrow */}
+                                {filteredUploads.length > 1 && (
+                                    <button
+                                        onClick={() => {
+                                            const newIdx = lightboxIndex < filteredUploads.length - 1 ? lightboxIndex + 1 : 0;
+                                            setLightboxIndex(newIdx);
+                                            setLightboxItem(filteredUploads[newIdx]);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            background: 'rgba(18, 18, 22, 0.85)',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '50%',
+                                            width: '44px',
+                                            height: '44px',
+                                            color: '#fff',
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            zIndex: 20,
+                                            boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                                        }}
+                                    >
+                                        <ChevronRight size={22} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Lightbox Bottom Info Bar */}
+                            <div style={{ width: '100%', maxWidth: '900px', background: 'rgba(18, 18, 22, 0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.14)', borderRadius: '100px', padding: '8px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.8rem', color: '#a1a1aa' }}>
+                                    <span>Size: <b style={{ color: '#fff' }}>{formatSize(lightboxItem.size)}</b></span>
+                                    <span>Views: <b style={{ color: '#8b5cf6' }}>{lightboxItem.views || 0}</b></span>
+                                    <span>Uploaded: <b style={{ color: '#fff' }}>{new Date(lightboxItem.created_at).toLocaleDateString()}</b></span>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        onClick={() => handleNativeShare(lightboxItem.id)}
+                                        style={{ padding: '6px 14px', fontSize: '0.78rem', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '50px', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <Share2 size={13} /> Share
+                                    </button>
+                                    <button
+                                        onClick={() => setQrModal({ url: `${baseUrl}/i/${lightboxItem.id}`, title: `/${lightboxItem.id}` })}
+                                        style={{ padding: '6px 14px', fontSize: '0.78rem', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '50px', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <QrCode size={13} /> QR Code
+                                    </button>
+                                    <button
+                                        onClick={() => setEmbedModalItem({
+                                            id: lightboxItem.id,
+                                            isVideo: !!lightboxItem.type?.startsWith('video/'),
+                                            title: lightboxItem.filename || lightboxItem.id
+                                        })}
+                                        style={{ padding: '6px 14px', fontSize: '0.78rem', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '50px', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <Code2 size={13} /> Embed
+                                    </button>
+                                    <button
+                                        onClick={() => copyLink(lightboxItem.id)}
+                                        style={{ padding: '6px 14px', fontSize: '0.78rem', background: 'rgba(255, 255, 255, 0.08)', borderRadius: '50px', border: '1px solid rgba(255,255,255,0.15)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+                                    >
+                                        <Copy size={13} /> {copiedId === lightboxItem.id ? "Copied!" : "Copy Link"}
+                                    </button>
+                                    <a
+                                        href={`/i/${lightboxItem.id}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{ padding: '6px 16px', fontSize: '0.78rem', background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', borderRadius: '50px', color: '#fff', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 600 }}
+                                    >
+                                        <ExternalLink size={13} /> Open Page
+                                    </a>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Command Palette Modal (Ctrl + K / Cmd + K) */}
+                <AnimatePresence>
+                    {isCommandPaletteOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setIsCommandPaletteOpen(false)}
+                            style={{
+                                position: 'fixed',
+                                inset: 0,
+                                background: 'rgba(9, 9, 11, 0.8)',
+                                backdropFilter: 'blur(16px)',
+                                WebkitBackdropFilter: 'blur(16px)',
+                                zIndex: 1100,
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                justifyContent: 'center',
+                                paddingTop: '12vh',
+                                paddingLeft: '1rem',
+                                paddingRight: '1rem',
+                            }}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                    width: '100%',
+                                    maxWidth: '620px',
+                                    background: 'rgba(18, 18, 24, 0.95)',
+                                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                                    borderRadius: '24px',
+                                    boxShadow: '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(139, 92, 246, 0.15)',
+                                    overflow: 'hidden',
+                                }}
+                            >
+                                {/* Search Bar Header */}
+                                <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', gap: '12px' }}>
+                                    <Search size={18} color="#8b5cf6" />
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder="Type a command or search files..."
+                                        value={cmdQuery}
+                                        onChange={(e) => setCmdQuery(e.target.value)}
+                                        style={{
+                                            flex: 1,
+                                            background: 'transparent',
+                                            border: 'none',
+                                            outline: 'none',
+                                            color: '#ffffff',
+                                            fontSize: '1rem',
+                                            fontFamily: 'inherit',
+                                        }}
+                                    />
+                                    <kbd style={{ fontSize: '0.72rem', background: 'rgba(255, 255, 255, 0.1)', padding: '3px 8px', borderRadius: '6px', color: '#a1a1aa' }}>
+                                        ESC
+                                    </kbd>
+                                </div>
+
+                                {/* Results & Commands */}
+                                <div style={{ maxHeight: '380px', overflowY: 'auto', padding: '12px' }}>
+                                    {/* Matching Files */}
+                                    {cmdQuery.trim() !== '' && (
+                                        <div style={{ marginBottom: '12px' }}>
+                                            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '4px 10px', marginBottom: '4px' }}>
+                                                Matching Uploads
+                                            </div>
+                                            {filteredUploads
+                                                .filter(u => u.id.toLowerCase().includes(cmdQuery.toLowerCase()) || (u.folder && u.folder.toLowerCase().includes(cmdQuery.toLowerCase())))
+                                                .slice(0, 5)
+                                                .map(u => (
+                                                    <div
+                                                        key={u.id}
+                                                        onClick={() => {
+                                                            setIsCommandPaletteOpen(false);
+                                                            setLightboxItem(u);
+                                                        }}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            padding: '10px 14px',
+                                                            borderRadius: '12px',
+                                                            cursor: 'pointer',
+                                                            transition: 'all 0.15s ease',
+                                                            background: 'rgba(255, 255, 255, 0.03)',
+                                                            marginBottom: '4px',
+                                                        }}
+                                                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)')}
+                                                        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)')}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                            <ImageIcon size={16} color="#8b5cf6" />
+                                                            <span style={{ fontSize: '0.88rem', color: '#f4f4f5', fontWeight: 500 }}>/{u.id}</span>
+                                                            {u.folder && (
+                                                                <span style={{ fontSize: '0.72rem', background: 'rgba(139,92,246,0.2)', color: '#c4b5fd', padding: '2px 8px', borderRadius: '6px' }}>
+                                                                    {u.folder}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <span style={{ fontSize: '0.75rem', color: '#a1a1aa' }}>Preview ↗</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    )}
+
+                                    {/* Default Quick Actions */}
+                                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '4px 10px', marginBottom: '4px' }}>
+                                        Quick Actions
+                                    </div>
+                                    {[
+                                        { icon: Upload, label: "Upload New Files", action: () => router.push('/') },
+                                        { icon: FolderPlus, label: "Create Folder", action: () => { setIsCommandPaletteOpen(false); setShowCreateFolderModal(true); } },
+                                        { icon: Key, label: "View API Keys", action: () => { setIsCommandPaletteOpen(false); setActiveTab('api'); } },
+                                        { icon: ExternalLink, label: "Open Telegram Storage Bot", action: () => window.open('https://t.me/PixEdge_bot', '_blank') },
+                                        { icon: LogOut, label: "Sign Out", action: () => signOut({ callbackUrl: '/' }) },
+                                    ].map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            onClick={item.action}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '12px',
+                                                padding: '10px 14px',
+                                                borderRadius: '12px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                marginBottom: '4px',
+                                            }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)')}
+                                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                        >
+                                            <item.icon size={16} color="#8b5cf6" />
+                                            <span style={{ fontSize: '0.88rem', color: '#f4f4f5', fontWeight: 500 }}>{item.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </div>
+    );
+}
