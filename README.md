@@ -143,8 +143,8 @@ Send `/link` to the bot — it returns a one-time URL. Visit it while logged int
 
 ### Local Development
 ```bash
-git clone https://github.com/GeekLuffy/PixEdge.git
-cd PixEdge
+git clone https://github.com/Unkmown24680/img.git
+cd img
 npm install
 # copy .env.example → .env.local and fill in values
 npm run dev
@@ -164,7 +164,9 @@ NEXTAUTH_URL=https://your-domain.com
 ```
 
 ### One-Click Deploy
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgeekluffy%2FPixEdge&env=TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,NEXT_PUBLIC_BASE_URL,NEXTAUTH_SECRET,NEXTAUTH_URL)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FUnkmown24680%2Fimg&env=TELEGRAM_BOT_TOKEN,TELEGRAM_CHAT_ID,UPSTASH_REDIS_REST_URL,UPSTASH_REDIS_REST_TOKEN,NEXT_PUBLIC_BASE_URL,NEXTAUTH_SECRET,NEXTAUTH_URL)
+
+> ⚠️ **Vercel uploads are capped at ~4.5 MB by the platform itself** — Vercel rejects larger request bodies with `FUNCTION_PAYLOAD_TOO_LARGE` before this app's code runs, so no config or code can lift it there. The 20 MB Bot API limit / 50 MB / 2 GB MTProto sizes require **self-hosting** (VPS, Docker, or any host without a proxy body cap). Set `MAX_UPLOAD_SIZE_MB` to your self-hosted limit (defaults to 2000).
 
 ---
 
