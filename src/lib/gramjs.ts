@@ -12,7 +12,10 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import { Api } from 'telegram';
-import { CustomFile } from 'telegram/client/uploads';
+import bigInt from 'big-integer';
+import fs from 'fs/promises';
+import os from 'os';
+import path from 'path';
 
 // ─── Singleton state ──────────────────────────────────────────────────────────
 
@@ -215,42 +218,56 @@ export async function uploadFileViaGram(
             : fileSize > 10  * 1024 * 1024 ? 4   // > 10 MB
             : 1;                                   // small
 
-    const file = new CustomFile(fileName, fileSize, '', fileBuffer);
+    // gramjs's uploadFile switches to reading `file.path` from disk for any
+    // file > 20MB-1, so an in-memory CustomFile with path='' crashes there.
+    // Hand sendFile a real temp-file path — gramjs slices it from disk and
+    // this works at any size up to the 2 GB MTProto limit.
+    const tmpPath = path.join(os.tmpdir(), `pixedge-${Date.now()}-${fileName.replace(/[/\\]/g, '_')}`);
 
     let lastProgressTime = Date.now();
     let lastUploadedBytes = 0;
 
-    const message = await client.sendFile(channel, {
-        file,
-        caption,
-        parseMode: 'html',
-        // forceDocument keeps the original file intact (no re-encoding)
-        // and works consistently for every MIME type including video/gif.
-        forceDocument: true,
-        workers,
-        progressCallback: (progress: number) => {
-            const percent = Math.min(100, Math.max(0, Math.round(progress * 100)));
-            const uploadedBytes = Math.round(progress * fileSize);
+    let message: Api.Message;
+    try {
+        await fs.writeFile(tmpPath, fileBuffer);
 
-            const now = Date.now();
-            const timeDiff = (now - lastProgressTime) / 1000;
+        message = await client.sendFile(channel, {
+            file: tmpPath,
+            // gramjs derives the document name from the temp path's basename —
+            // override it so the stored file keeps its original name.
+            attributes: [new Api.DocumentAttributeFilename({ fileName })],
+            caption,
+            parseMode: 'html',
+            // forceDocument keeps the original file intact (no re-encoding)
+            // and works consistently for every MIME type including video/gif.
+            forceDocument: true,
+            workers,
+            progressCallback: (progress: number) => {
+                const percent = Math.min(100, Math.max(0, Math.round(progress * 100)));
+                const uploadedBytes = Math.round(progress * fileSize);
 
-            // Log chunk progress updates every 250ms for server diagnostic monitoring
-            if (timeDiff >= 0.25 || percent === 100) {
-                const bytesDiff = uploadedBytes - lastUploadedBytes;
-                const speedBytesPerSec = timeDiff > 0 ? bytesDiff / timeDiff : 0;
-                const speedMb = (speedBytesPerSec / (1024 * 1024)).toFixed(1);
-                console.log(`[gramjs] MTProto chunk upload: ${percent}% (${(uploadedBytes / (1024 * 1024)).toFixed(1)} MB / ${(fileSize / (1024 * 1024)).toFixed(1)} MB) @ ${speedMb} MB/s`);
+                const now = Date.now();
+                const timeDiff = (now - lastProgressTime) / 1000;
 
-                lastProgressTime = now;
-                lastUploadedBytes = uploadedBytes;
-            }
+                // Log chunk progress updates every 250ms for server diagnostic monitoring
+                if (timeDiff >= 0.25 || percent === 100) {
+                    const bytesDiff = uploadedBytes - lastUploadedBytes;
+                    const speedBytesPerSec = timeDiff > 0 ? bytesDiff / timeDiff : 0;
+                    const speedMb = (speedBytesPerSec / (1024 * 1024)).toFixed(1);
+                    console.log(`[gramjs] MTProto chunk upload: ${percent}% (${(uploadedBytes / (1024 * 1024)).toFixed(1)} MB / ${(fileSize / (1024 * 1024)).toFixed(1)} MB) @ ${speedMb} MB/s`);
 
-            if (onProgress) {
-                onProgress(percent, uploadedBytes, fileSize);
-            }
-        },
-    }) as Api.Message;
+                    lastProgressTime = now;
+                    lastUploadedBytes = uploadedBytes;
+                }
+
+                if (onProgress) {
+                    onProgress(percent, uploadedBytes, fileSize);
+                }
+            },
+        }) as Api.Message;
+    } finally {
+        await fs.unlink(tmpPath).catch(() => {});
+    }
 
     // Extract the document ID for display purposes
     let telegramFileId = `gram_msg_${message.id}`;
@@ -366,7 +383,7 @@ export async function streamFileViaGram(
                 try {
                     for await (const chunkRaw of (client as any).iterDownload({
                         file: fileLocation,
-                        offset: BigInt(alignedStart),
+                        offset: bigInt(alignedStart), // gramjs needs big-integer, not native BigInt (calls .mod())
                         requestSize: 1024 * 1024, // 1 MB chunks
                         dcId: doc.dcId,
                     })) {
