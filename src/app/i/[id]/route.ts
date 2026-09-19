@@ -339,7 +339,12 @@ export async function GET(
         }
 
         // ── v1 path: Bot API redirect / proxy (original behaviour with Range support) ───────────
-        const fileUrl = await getTelegramFileUrl(record.telegram_file_id);
+        // mtproto records store a raw document id in telegram_file_id — getFile
+        // on it always throws "invalid file_id". Only resolve a Bot API URL for
+        // v1 records; browser visits (serveRaw=false) continue to the viewer
+        // page below, which streams through the gramjs path via /i/<id><ext>.
+        const isMtprotoRecord = !!record.message_id;
+        const fileUrl = isMtprotoRecord ? '' : await getTelegramFileUrl(record.telegram_file_id);
 
         const proxyImage = async () => {
             const fetchHeaders: Record<string, string> = {};
@@ -368,6 +373,11 @@ export async function GET(
         };
 
         if (serveRaw) {
+            if (!fileUrl) {
+                // mtproto record reached here only when gramjs is unconfigured —
+                // no Bot API file_id exists to proxy.
+                return new NextResponse(JSON.stringify({ error: 'File served via MTProto; gramjs not configured' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+            }
             return proxyImage();
         }
 
