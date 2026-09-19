@@ -229,7 +229,7 @@ export async function GET(
       const err = document.getElementById('errorMsg');
       err.style.display = 'none';
       try {
-        const res = await fetch('/api/v1/info/${id}', {
+        const res = await fetch('${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/api/v1/info/${id}', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password: pass })
@@ -281,12 +281,13 @@ export async function GET(
         // ── v2 path: gramjs MTProto streaming (true 1 MB-chunk streaming with Range support) ──────
         if (record.message_id && isGramConfigured()) {
             if (serveRaw) {
-                try {
+                const messageId: number = record.message_id;
+                const serveViaGram = async () => {
                     const fileSizeHint = record.metadata?.size || 0;
                     const parsedRange = fileSizeHint ? parseRangeHeader(rangeHeader, fileSizeHint) : null;
 
                     const gramInfo = await streamFileViaGram(
-                        record.message_id,
+                        messageId,
                         parsedRange || undefined
                     );
 
@@ -312,9 +313,27 @@ export async function GET(
                     headers.set('Content-Disposition', `${dispositionType}; filename="${finalFileName}"`);
 
                     return new Response(stream, { status, headers });
+                };
+
+                try {
+                    return await serveViaGram();
                 } catch (gramErr) {
-                    console.error('[gramjs] stream error, falling back to Bot API:', gramErr);
-                    // fall through to Bot API below
+                    // gramjs fails transiently right after a big upload (sender
+                    // still busy / reconnecting). One short retry self-heals it.
+                    console.error('[gramjs] stream error, retrying once:', gramErr);
+                    await new Promise(r => setTimeout(r, 1500));
+                    try {
+                        return await serveViaGram();
+                    } catch (gramErr2) {
+                        // telegram_file_id on mtproto records is gram_msg_* — the
+                        // Bot API fallback below can never resolve it, so fail
+                        // fast instead of guaranteed "invalid file_id" → 500.
+                        console.error('[gramjs] stream failed twice for mtproto record:', gramErr2);
+                        return new Response(JSON.stringify({ error: 'Upstream temporarily unavailable, retry shortly' }), {
+                            status: 503,
+                            headers: { 'Content-Type': 'application/json', 'Retry-After': '3' },
+                        });
+                    }
                 }
             }
         }
@@ -361,7 +380,7 @@ export async function GET(
         const isAudio = !!record.metadata?.type?.startsWith('audio/');
         const isMedia = isVideo || isAudio;
         const ext = isVideo ? '.mp4' : (isAudio ? '.mp3' : '.jpg');
-        const proxiedImgSrc = `/i/${id}${ext}`;
+        const proxiedImgSrc = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/i/${id}${ext}`;
         const views = record.views || 0;
         const downloads = record.downloads || 0;
         const formattedDate = new Date(record.created_at).toLocaleDateString();

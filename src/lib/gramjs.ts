@@ -17,6 +17,19 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 
+// gramjs's alpha TL validator console.errors a CastError on every serialized
+// upload.GetFile when the bundler duplicates big-integer (instanceof fails),
+// then getBytes() swallows it and serializes fine anyway — ~60 noise lines per
+// download that drown real errors. Drop them before they hit the log.
+// ponytail: global console patch; if gramjs ever ships a real fix or a logger
+// hook, delete this block.
+const origConsoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+    if (args[0] instanceof Error && args[0].name === 'CastError') return;
+    if (typeof args[0] === 'string' && args[0].includes('Found wrong type for offset')) return;
+    origConsoleError(...args);
+};
+
 // ─── Singleton state ──────────────────────────────────────────────────────────
 
 let _client: TelegramClient | null = null;
