@@ -353,7 +353,11 @@ export async function GET(
             const response = await fetch(fileUrl, { headers: fetchHeaders });
             const blob = await response.blob();
             const headers = new Headers();
-            headers.set('Content-Type', response.headers.get('Content-Type') || 'image/jpeg');
+            // Telegram's file URL answers application/octet-stream for Bot API
+            // documents — prefer the UPLOAD's recorded type so <img>/download
+            // metadata is right (bytes are sniffed fine either way, but an
+            // honest type beats a generic one).
+            headers.set('Content-Type', record.metadata?.type || response.headers.get('Content-Type') || 'image/jpeg');
             headers.set('Accept-Ranges', 'bytes');
             headers.set('Cache-Control', 'public, max-age=31536000, immutable');
 

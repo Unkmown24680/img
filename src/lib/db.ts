@@ -634,7 +634,15 @@ export async function getUserApiKey(userId: string): Promise<string | null> {
 }
 
 export async function verifyApiKey(key: string): Promise<string | null> {
-    if (!redis) return null;
+    if (!redis) {
+        // Self-hosted without Upstash: static key map from env —
+        // PIXEDGE_API_KEYS="pe_xxx:userId,pe_yyy:otherUser" (VPS deployment;
+        // keys are only needed for programmatic uploads, e.g. LiveNote).
+        const entry = (process.env.PIXEDGE_API_KEYS || '')
+            .split(',').map((s) => s.trim()).filter(Boolean)
+            .find((s) => s.startsWith(`${key}:`));
+        return entry ? entry.split(':')[1] ?? null : null;
+    }
     return await redis.get(`apikey:${key}`);
 }
 
